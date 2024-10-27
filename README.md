@@ -2,50 +2,48 @@
 
 This is ROS package of LiDAR Tracking
 
-<p align="center"><img src=pictures/patchwork++.gif alt="animated" /></p>
+<p align="center"><img src=pictures/demo.gif alt="animated" /></p>
 
 
 ## :open_file_folder: What's in this repository
 
 * ROS Noetic based LiDAR Tracking source code
-* Demo launch file ([demo.launch][launchlink]) with sample rosbag file. You can execute simply!
+* Demo launch file ([demo.launch][launchlink])
 
 [launchlink]: https://github.com/inha-cvl/LiDAR-Tracking/tree/main/launch
 
 ## :package: Prerequisite packages
-You may need to install ROS, PCL, Eigen, ...
+You need to install ROS, PCL, Sophus, Eigen, JSK, Json...
 
 ## :gear: How to build LiDAR-Tracking
-To build LiDAR-Tracking, you can follow below codes.
 
 ```bash
 $ mkdir -p ~/catkin_ws/src
+$ git clone https://github.com/inha-cvl/LiDAR-Tracking.git
 $ cd ~/catkin_ws
 $ catkin_make
 ```
 
-## :runner: To run the demo codes
+## :runner: To run the demo
 
 ```bash
-# Start Tracking
-$ roslaunch lidar_tracking demo.launch
-# Start the bag file
+# Start Tracking with bag file
 $ roscore
+$ roslaunch lidar_tracking demo.launch
 $ rosparam set /use_sim_time true
-$ rosbag play kiapi.bag
+$ rosbag play kiapi.bag --clock
 ```
 
-## :pushpin: TODO List
-- [ ] Add efficient adaptive clustering 
-- [ ] Add tracking source code
-- [ ] Add Refernce Patchwork, undistortion etc..
+## :pushpin: References
+- https://github.com/url-kaist/patchwork-plusplus-ros
+- https://github.com/SmallMunich/L-Shape-Fitting
+- https://github.com/yzrobot/adaptive_clustering.git
 
 ## Citation
 If you use our codes, please cite our [paper]
 
 
 [paper]: --
-
 
 
 ## :postbox: Contact

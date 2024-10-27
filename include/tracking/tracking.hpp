@@ -45,7 +45,6 @@ public:
         clearLogFile(tracking_time_log_path);
         clearLogFile(transform_time_log_path);
         clearLogFile(correction_time_log_path);
-        clearLogFile(average_time_log_path);
     }
 
     void enuUpdate(const geometry_msgs::PoseStamped::ConstPtr &enu_msg);
@@ -114,14 +113,12 @@ private:
     std::string tracking_time_log_path = package_path + "tracking.txt";
     std::string transform_time_log_path = package_path + "transform.txt";
     std::string correction_time_log_path = package_path + "correction.txt";
-    std::string average_time_log_path = package_path + "average.txt";
 };
 
 void Tracking::enuUpdate(const geometry_msgs::PoseStamped::ConstPtr &enu_msg)
 {   
     enu_cache.add(enu_msg);
 }
-
 
 void Tracking::integrationBbox(jsk_recognition_msgs::BoundingBoxArray &cluster_bbox_array, 
                                jsk_recognition_msgs::BoundingBoxArray &deep_bbox_array,
@@ -138,50 +135,12 @@ void Tracking::integrationBbox(jsk_recognition_msgs::BoundingBoxArray &cluster_b
 
     output_bbox_array.boxes.clear();
     
-    // mission
-    if (!cluster_bbox_array.boxes.empty()) {
-        cluster_bbox_array.boxes.erase(
-            std::remove_if(cluster_bbox_array.boxes.begin(), cluster_bbox_array.boxes.end(),
-                [this](const jsk_recognition_msgs::BoundingBox &cluster_bbox) {
-                    float clusterDistance = std::sqrt(cluster_bbox.pose.position.x * cluster_bbox.pose.position.x + 
-                                                    cluster_bbox.pose.position.y * cluster_bbox.pose.position.y);
-                    if (clusterDistance < ground_removal_distance) {
-                        if (cluster_bbox.dimensions.x < cluster_size || 
-                            cluster_bbox.dimensions.y < cluster_size || 
-                            cluster_bbox.dimensions.z < cluster_size) { return true; }
-
-                        double clusterRatio = std::min(cluster_bbox.dimensions.x, cluster_bbox.dimensions.y) /
-                                            std::max(cluster_bbox.dimensions.x, cluster_bbox.dimensions.y);
-                        if (clusterRatio < cluster_ratio) { return true; }
-                    }
-                    return false;
-                }),
-            cluster_bbox_array.boxes.end());
-    }
-    if (!deep_bbox_array.boxes.empty()) {
-        deep_bbox_array.boxes.erase(
-            std::remove_if(deep_bbox_array.boxes.begin(), deep_bbox_array.boxes.end(),
-                [this](const jsk_recognition_msgs::BoundingBox &deep_bbox) {
-                    float deepDistance = std::sqrt(deep_bbox.pose.position.x * deep_bbox.pose.position.x + 
-                                                deep_bbox.pose.position.y * deep_bbox.pose.position.y);
-                    return (deepDistance < deep_distance && deep_bbox.value < deep_score);
-                }),
-            deep_bbox_array.boxes.end());
-    }
-    
     if (cluster_bbox_array.boxes.empty()) { cluster_bbox_array.boxes.clear(); }
     if (deep_bbox_array.boxes.empty()) { deep_bbox_array.boxes.clear(); }
     
-
     // mode
     if (mode == 0) {
         for (const auto &cluster_bbox : cluster_bbox_array.boxes) {
-
-            // mission // cluster_distance가 70이 아니라 30이면 왜 문제가 생길까?
-            
-            float clusterDistance = std::sqrt(cluster_bbox.pose.position.x * cluster_bbox.pose.position.x + 
-                                              cluster_bbox.pose.position.y * cluster_bbox.pose.position.y);
-            if (clusterDistance < cluster_distance) { continue; }
             
             bool keep_cluster_bbox = true;
             for (const auto &deep_bbox : deep_bbox_array.boxes) {
@@ -209,6 +168,7 @@ void Tracking::integrationBbox(jsk_recognition_msgs::BoundingBoxArray &cluster_b
     saveTimeToFile(integration_time_log_path, time_taken);
 }
 
+/*
 void Tracking::cropHDMapBbox(const jsk_recognition_msgs::BoundingBoxArray &input_bbox_array, 
                              jsk_recognition_msgs::BoundingBoxArray &output_bbox_array, 
                              const ros::Time &input_stamp, tf2_ros::Buffer &tf_buffer, double& time_taken) 
@@ -258,6 +218,62 @@ void Tracking::cropHDMapBbox(const jsk_recognition_msgs::BoundingBoxArray &input
         }
 
         if (within_range) {
+            output_bbox_array.boxes.push_back(box);
+        }
+    }
+
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed_seconds = end - start;
+    time_taken = elapsed_seconds.count();
+    saveTimeToFile(crophdmap_time_log_path, time_taken);
+}
+*/
+
+void Tracking::cropHDMapBbox(const jsk_recognition_msgs::BoundingBoxArray &input_bbox_array, 
+                             jsk_recognition_msgs::BoundingBoxArray &output_bbox_array, 
+                             const ros::Time &input_stamp, tf2_ros::Buffer &tf_buffer, double& time_taken) 
+{
+    auto start = std::chrono::steady_clock::now();
+
+    output_bbox_array.boxes.clear();
+
+    geometry_msgs::TransformStamped transformStamped;
+    try {
+        transformStamped = tf_buffer.lookupTransform(world_frame, target_frame, ros::Time(0)); // input_stamp
+    } catch (tf2::TransformException &ex) {
+        output_bbox_array = input_bbox_array;
+        return;
+    }
+
+    // 현재 로봇 위치 가져오기
+    geometry_msgs::Point current_position;
+    current_position.x = transformStamped.transform.translation.x;
+    current_position.y = transformStamped.transform.translation.y;
+
+    // 1. 100m 이내에 있는 노드 필터링
+    std::vector<std::pair<float, float>> nearby_nodes;
+    for (const auto& node : global_path) {
+        double distance = std::hypot(node.first - current_position.x, node.second - current_position.y);
+        if (distance <= 100.0) { // 100m 이내 노드 선택
+            nearby_nodes.push_back(node);
+        }
+    }
+
+    // 2. 필터링된 노드와 radius 이내에 있는 장애물 필터링
+    for (const auto& box : input_bbox_array.boxes) {
+        geometry_msgs::Point transformed_point;
+        tf2::doTransform(box.pose.position, transformed_point, transformStamped);
+
+        bool within_radius = false;
+        for (const auto& node : nearby_nodes) {
+            double distance = std::hypot(node.first - transformed_point.x, node.second - transformed_point.y);
+            if (distance <= radius) { // radius 이내의 거리 필터링
+                within_radius = true;
+                break;
+            }
+        }
+
+        if (within_radius) {
             output_bbox_array.boxes.push_back(box);
         }
     }
@@ -351,9 +367,9 @@ void Tracking::correctionBboxRelativeSpeed(const jsk_recognition_msgs::BoundingB
             double yaw = tf::getYaw(box.pose.orientation);
             double delta_x = velocity * delta_time * cos(yaw);
             double delta_y = velocity * delta_time * sin(yaw);
-            // 50km/h & 0.05sec -> 0.69m 
-            delta_x = std::copysign(std::min(std::abs(delta_x), 1.0), delta_x);
-            delta_y = std::copysign(std::min(std::abs(delta_y), 1.0), delta_y);
+            // 50km/h & 0.1sec -> 1.38m 
+            delta_x = std::copysign(std::min(std::abs(delta_x), 1.5), delta_x);
+            delta_y = std::copysign(std::min(std::abs(delta_y), 1.5), delta_y);
 
             corrected_box.pose.position.x += delta_x; // x 방향으로 이동
             corrected_box.pose.position.y += delta_y; // y 방향으로 이동                    
@@ -415,22 +431,4 @@ void Tracking::correctionBboxTF(const jsk_recognition_msgs::BoundingBoxArray &in
     std::chrono::duration<double> elapsed_seconds = end - start;
     time_taken = elapsed_seconds.count();
     saveTimeToFile(correction_time_log_path, time_taken);
-}
-
-void Tracking::averageTime()
-{
-    std::ofstream file(average_time_log_path, std::ios::app);
-
-    if (!file.is_open()) {
-        std::cerr << "Error opening file: " << average_time_log_path << std::endl;
-        return;
-    }
-
-    file << "integration : " << calculateAverageTime(integration_time_log_path) << "\n";
-    file << "crophdmap : " << calculateAverageTime(crophdmap_time_log_path) << "\n";
-    file << "tracking : " << calculateAverageTime(tracking_time_log_path) << "\n";
-    file << "transform : " << calculateAverageTime(transform_time_log_path) << "\n";
-    file << "correction : " << calculateAverageTime(correction_time_log_path) << "\n";
-
-    file.close();
 }

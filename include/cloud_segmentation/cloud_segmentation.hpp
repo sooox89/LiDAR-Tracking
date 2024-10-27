@@ -79,7 +79,6 @@ public:
         clearLogFile(downsampling_time_log_path);
         clearLogFile(clustering_time_log_path);
         clearLogFile(lshape_time_log_path);
-        clearLogFile(average_time_log_path);
     }
 
     void msgToPointCloud(const sensor_msgs::PointCloud2::Ptr &cloud_msg, pcl::PointCloud<PointT>& cloud);
@@ -105,7 +104,6 @@ public:
     void adaptiveVoxelClustering(const pcl::PointCloud<PointT>& cloudIn, 
                                                      std::vector<pcl::PointCloud<ClusterPointT>>& outputClusters, 
                                                      double& time_taken);
-    void averageTime();
 
 private:
     ros::NodeHandle nh_;
@@ -188,7 +186,6 @@ private:
     std::string downsampling_time_log_path = package_path + "downsampling.txt";
     std::string clustering_time_log_path = package_path + "clustering.txt";
     std::string lshape_time_log_path = package_path + "lshape.txt";
-    std::string average_time_log_path = package_path + "average.txt";
 
 };
 
@@ -208,7 +205,7 @@ void CloudSegmentation<PointT>::imuUpdate(const sensor_msgs::Imu::ConstPtr &imu_
 }
 
 template<typename PointT> inline
-void CloudSegmentation<PointT>::projectPointCloud(const pcl::PointCloud<PointT>& cloudIn, pcl::PointCloud<PointT>& cloudOut, double& time_taken) 
+void CloudSegmentation<PointT>::projectPointCloud(const pcl::PointCloud<PointT>& cloudIn, pcl::PointCloud<PointT>& cloudOut, double& time_taken)
 {
     auto start = std::chrono::steady_clock::now();
 
@@ -218,36 +215,49 @@ void CloudSegmentation<PointT>::projectPointCloud(const pcl::PointCloud<PointT>&
     }
 
     cloudOut.clear();
-    cloudOut.points.resize(V_SCAN * H_SCAN, PointT());
+    cloudOut.points.resize(V_SCAN * H_SCAN);
 
-    std::vector<float> channelAngles = {14.985, 13.283, 11.758, 10.483, 9.836, 9.171, 8.496, 7.812, 7.462, 7.115, 6.767, 6.416, 6.064, 5.71,
-                                        5.355, 4.998, 4.643, 4.282, 3.921, 3.558, 3.194, 2.829, 2.463, 2.095, 1.974, 1.854, 1.729, 1.609, 1.487, 1.362, 1.242, 1.12, 0.995, 0.875, 0.75,
-                                        0.625, 0.5, 0.375, 0.25, 0.125, 0, -0.125, -0.25, -0.375, -0.5, -0.626, -0.751, -0.876, -1.001, -1.126, -1.251,
-                                        -1.377, -1.502, -1.627, -1.751, -1.876, -2.001, -2.126, -2.251, -2.376, -2.501, -2.626, -2.751, -2.876, -3.001, -3.126, -3.251, -3.376, -3.501,
-                                        -3.626, -3.751, -3.876, -4.001, -4.126, -4.25, -4.375, -4.501, -4.626, -4.751, -4.876, -5.001, -5.126, -5.252, -5.377, -5.502, -5.626, -5.752,
-                                        -5.877, -6.002, -6.378, -6.754, -7.13, -7.507, -7.882, -8.257, -8.632, -9.003, -9.376, -9.749, -10.121, -10.493, -10.864, -11.234, -11.603, -11.975,
-                                        -12.343, -12.709, -13.075, -13.439, -13.803, -14.164, -14.525, -14.879, -15.237, -15.593, -15.948, -16.299, -16.651, -17, -17.347, -17.701, -18.386,
-                                        -19.063, -19.73, -20.376, -21.653, -23.044, -24.765};
+    // Pandar64의 각 채널 수직 각도 설정
+    std::vector<float> channelAngles = {14.882, 11.032, 8.059, 5.057, 3.04, 2.028, 1.86, 1.688, 1.522, 1.351, 1.184, 1.013,
+                                        0.846, 0.675, 0.508, 0.337, 0.169, 0.000, -0.169, -0.337, -0.508, -0.675, -0.845, -1.013,
+                                        -1.184, -1.351, -1.522, -1.688, -1.86, -2.028, -2.198, -2.365, -2.536, -2.7, -2.873, -3.04,
+                                        -3.21, -3.375, -3.548, -3.712, -3.884, -4.05, -4.221, -4.385, -4.558, -4.72, -4.892, -5.057,
+                                        -5.229, -5.391, -5.565, -5.731, -5.898, -6.061, -7.063, -8.059, -9.06, -9.885, -11.032, -12.006,
+                                        -12.974, -13.93, -18.889, -24.897};
 
-    for (const auto& inPoint : cloudIn.points) {
-        float verticalAngle = atan2(inPoint.z, sqrt(inPoint.x * inPoint.x + inPoint.y * inPoint.y)) * 180 / M_PI;
+    for (const auto& inPoint : cloudIn.points)
+    {
+        PointT outPoint = inPoint;
 
-        // Find the closest channel angle
-        auto it = std::lower_bound(channelAngles.begin(), channelAngles.end(), verticalAngle, std::greater<>());
-        if (it == channelAngles.end()) continue;  // 각도가 모든 채널의 범위를 벗어난 경우
+        // 수직 각도를 계산하여 해당 레이저 채널을 찾음
+        float verticalAngle = atan2(outPoint.z, sqrt(outPoint.x * outPoint.x + outPoint.y * outPoint.y)) * 180 / M_PI;
 
-        size_t rowIdn = std::distance(channelAngles.begin(), it);
+        // 가장 가까운 수직 각도 인덱스를 찾음
+        auto it = std::min_element(channelAngles.begin(), channelAngles.end(),
+                                   [verticalAngle](float a, float b) {
+                                       return fabs(a - verticalAngle) < fabs(b - verticalAngle);
+                                   });
+        if (it == channelAngles.end()) continue;
 
-        float horizonAngle = atan2(inPoint.x, inPoint.y) * 180 / M_PI;
-        size_t columnIdn = static_cast<size_t>((horizonAngle + 180.0) / 360.0 * H_SCAN);
+        size_t rowIdn = std::distance(channelAngles.begin(), it);  // 각도에 맞는 수직 인덱스(row)
 
-        if (columnIdn >= H_SCAN) {
+        if (rowIdn < 0 || rowIdn >= V_SCAN)
+            continue;
+
+        // 수평 각도 계산 및 인덱스
+        float horizonAngle = atan2(outPoint.x, outPoint.y) * 180 / M_PI;
+        size_t columnIdn = static_cast<size_t>(-round((horizonAngle - 90.0) / ang_res_x) + H_SCAN / 2);
+
+        if (columnIdn >= H_SCAN)
             columnIdn -= H_SCAN;
-        }
+
+        if (columnIdn < 0 || columnIdn >= H_SCAN)
+            continue;
 
         size_t index = columnIdn + rowIdn * H_SCAN;
+
         if (index < cloudOut.points.size()) {
-            cloudOut.points[index] = inPoint;
+            cloudOut.points[index] = outPoint;
         }
     }
 
@@ -256,6 +266,7 @@ void CloudSegmentation<PointT>::projectPointCloud(const pcl::PointCloud<PointT>&
     time_taken = elapsed_seconds.count();
     saveTimeToFile(projection_time_log_path, time_taken);
 }
+
 
 template<typename PointT> inline
 void CloudSegmentation<PointT>::convertPointCloudToImage(const pcl::PointCloud<PointT>& cloudIn, cv::Mat& imageOut, double& time_taken) 
@@ -818,27 +829,5 @@ void CloudSegmentation<PointT>::fittingLShape(const std::vector<pcl::PointCloud<
     std::chrono::duration<double> elapsed_seconds = end - start;
     time_taken = elapsed_seconds.count();
     saveTimeToFile(lshape_time_log_path, time_taken);
-}
-
-template<typename PointT> inline
-void CloudSegmentation<PointT>::averageTime()
-{
-    std::ofstream file(average_time_log_path, std::ios::app);
-
-    if (!file.is_open()) {
-        std::cerr << "Error opening file: " << average_time_log_path << std::endl;
-        return;
-    }
-
-    file << "projection : " << calculateAverageTime(projection_time_log_path) << "\n";
-    file << "converstion : " << calculateAverageTime(convert_time_log_path) << "\n";
-    file << "crop : " << calculateAverageTime(crop_time_log_path) << "\n";
-    file << "ground removal : " << calculateAverageTime(removalground_time_log_path) << "\n";
-    file << "undistortion : " << calculateAverageTime(undistortion_time_log_path) << "\n";
-    file << "downsampling : " << calculateAverageTime(downsampling_time_log_path) << "\n";
-    file << "clustering : " << calculateAverageTime(clustering_time_log_path) << "\n";
-    file << "Lshape fitting : " << calculateAverageTime(lshape_time_log_path) << "\n";
-
-    file.close();
 }
 

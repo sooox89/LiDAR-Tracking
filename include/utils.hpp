@@ -112,9 +112,9 @@ visualization_msgs::MarkerArray ta2msg(const visualization_msgs::MarkerArray& ta
     for (const auto& marker : ta.markers)
     {
         visualization_msgs::Marker temp_marker = marker;
-        temp_marker.header.stamp = stamp;     
+        temp_marker.header.stamp = stamp;
         temp_marker.header.frame_id = frame_id;
-        temp_marker.lifetime = ros::Duration(0.05);
+        temp_marker.lifetime = ros::Duration(0.1);
         ta_ROS.markers.push_back(temp_marker);
     }
 
@@ -132,7 +132,7 @@ visualization_msgs::MarkerArray bba2ma(const jsk_recognition_msgs::BoundingBoxAr
         
         visualization_msgs::Marker marker;
         marker.header.frame_id = frame_id;
-        marker.lifetime = ros::Duration(0.05);
+        marker.lifetime = ros::Duration(0.1);
         marker.header.stamp = stamp;
         marker.ns = "model";
         marker.id = i;
@@ -462,15 +462,15 @@ void clearLogFile(const std::string& file_path)
 // for experiment
 void saveTimeToFile(const std::string& timing_file, double time_taken) 
 {   
-    // std::ofstream file(timing_file, std::ios::app);
+    std::ofstream file(timing_file, std::ios::app);
 
-    // if (!file.is_open()) {
-    //     std::cerr << "Error opening file: " << timing_file << std::endl;
-    //     return;
-    // }
+    if (!file.is_open()) {
+        std::cerr << "Error opening file: " << timing_file << std::endl;
+        return;
+    }
 
-    // file << time_taken << "\n";
-    // file.close();
+    file << time_taken << "\n";
+    file.close();
 }
 
 double calculateAverageTime(const std::string& timing_file) 

@@ -1,5 +1,25 @@
-integration : 0
-crophdmap : 0
-tracking : 0
-transform : 0
-correction : 0
+tracking
+min : 0.0000020 sec
+max: 0.0000067 sec
+average: 0.0000026 sec
+
+transform
+min : 0.0000005 sec
+max: 0.0000013 sec
+average: 0.0000007 sec
+
+integration
+min : 0.0000059 sec
+max: 0.0000336 sec
+average: 0.0000152 sec
+
+correction
+min : 0.0000002 sec
+max: 0.0000028 sec
+average: 0.0000004 sec
+
+crophdmap
+min : 0.0000513 sec
+max: 0.0000921 sec
+average: 0.0000643 sec
+

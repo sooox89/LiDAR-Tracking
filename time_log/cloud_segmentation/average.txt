@@ -1,8 +1,30 @@
-projection : 0
-converstion : 0
-crop : 0
-ground removal : 0
-undistortion : 0
-downsampling : 0
-clustering : 0
-Lshape fitting : 0
+undistortion
+min : 0.0007641 sec
+max: 0.0011013 sec
+average: 0.0009534 sec
+
+crop
+min : 0.0008714 sec
+max: 0.0011647 sec
+average: 0.0009690 sec
+
+lshape
+min : 0.0023946 sec
+max: 0.0058869 sec
+average: 0.0043936 sec
+
+removalground
+min : 0.0025625 sec
+max: 0.0040058 sec
+average: 0.0033367 sec
+
+clustering
+min : 0.0046397 sec
+max: 0.0168719 sec
+average: 0.0108585 sec
+
+downsampling
+min : 0.0009273 sec
+max: 0.0015226 sec
+average: 0.0011107 sec
+

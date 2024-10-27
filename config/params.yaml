@@ -3,14 +3,14 @@
 # 파라미터 순서랑 클래스 내에서 파라미터 변수 선언할 때 순서랑 맞춰줄 것?
 
 Public:
-  map: "/map/kiapi.json"
+  map: "/map/songdo.json"
   lidar_frame: "hesai_lidar"
   target_frame: "ego_car"
   world_frame: "world"
 
 Cloud_Segmentation:
   lidar_settings:
-    V_SCAN: 128 # Pandar 64 or OT 128
+    V_SCAN: 64 # Pandar 64 or OT 128
     H_SCAN: 1800
     ang_res_x: 0.2 # Calculated as 360.0 / H_SCAN
     ang_res_y: 0.3125 # Calculated as 40.0 / V_SCAN
@@ -26,17 +26,17 @@ Cloud_Segmentation:
     filter:
       min_size:
         x: 0.2
-        y: 0.2
-        z: 0.2
+        y: 0.3
+        z: 0.3
       max_size:
-        x: 6.0
-        y: 6.0
-        z: 3.0
+        x: 13.0
+        y: 13.0
+        z: 4.0
     adaptive:
       min_size: 10
       max_size: 2000
-      min_tolerance: 0.8
-      max_tolerance: 1.5
+      min_tolerance: 0.7
+      max_tolerance: 1.2
       max_region_distance: 100
       number_region: 10
       min_leaf_size: 0.2
@@ -47,12 +47,12 @@ Cloud_Segmentation:
 
   crop:
     max:
-      x: 110.0
-      y: 20.0
+      x: 100.0
+      y: 40.0
       z: 2.5
     min:
-      x: -80.0
-      y: -35.0
+      x: -100.0
+      y: -40.0
       z: -1.4
     crop_ring:
       enabled: false
@@ -70,7 +70,7 @@ Tracking:
   crop_hd_map:
     number_front_node: 200
     number_back_node: 200
-    radius: 5.0
+    radius: 4.0
   track:
     invisibleCnt: 20
     deque:
@@ -78,15 +78,3 @@ Tracking:
       number_orientation: 10
       thresh_velocity: 30.0 # m/s
       thresh_orientation: 30.0 # degree
-
-Mission:
-  tracking:
-    cluster_distance: 65 # 클러스터 사용 시작 거리
-    # ground_removal_distance 내에 있는 크기 cluster_ratio, 비율 cluster_ratio 이내 클러스터 삭제
-    ground_removal_distance: 50 # 경사로 지면 제거용
-    cluster_size: 0.4
-    cluster_ratio: 0.1
-    # deep_distacne 내 deep_box는 deep_score 이상만 사용
-    deep_distance: 30
-    deep_score: 0.1 # 0.55
-    

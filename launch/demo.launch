@@ -1,14 +1,26 @@
 <launch>
 
+<arg name="lidar_topic" default="/lidar_points"/>
+<arg name="lidar_frame" default="hesai_lidar"/>
+<!-- <arg name="imu_topic" default="/ublox/imu_meas"/> -->
+<arg name="imu_topic" default="/imu/data_raw"/>
+<arg name="target_frame" default="ego_car"/>
+<arg name="world_frame" default="world"/>
+
   <node name="cloud_segmentation" pkg="lidar_tracking" type="cloud_segmentation" output="screen">
     <rosparam command="load" file="$(find lidar_tracking)/config/patchworkpp_hesai.yaml" />
-    <!-- <rosparam command="load" file="$(find lidar_tracking)/config/adaptive_param.yaml" /> -->
-
+    <rosparam command="load" file="$(find lidar_tracking)/config/params.yaml" />
+    <param name="lidar_topic" value="$(arg lidar_topic)"/>
+    <param name="lidar_frame" value="$(arg lidar_frame)"/>
+    <param name="imu_topic" value="$(arg imu_topic)"/>
   </node>
   
   <node name="tracking" pkg="lidar_tracking" type="tracking" output="screen">
+    <rosparam command="load" file="$(find lidar_tracking)/config/params.yaml" />
+    <param name="lidar_frame" value="$(arg lidar_frame)"/>
+    <param name="target_frame" value="$(arg target_frame)"/>
   </node>
   
-  <!-- <node name="$(anon rviz)" pkg="rviz" type="rviz" args="-d $(find cloud_segmentation)/rviz/main.rviz"/> -->
+  <!-- <node name="$(anon rviz)" pkg="rviz" type="rviz" args="-d $(find lidar_tracking)/rviz/hesai.rviz"/> -->
 
 </launch>
