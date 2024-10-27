@@ -657,6 +657,7 @@ void CloudSegmentation<PointT>::adaptiveClustering(const pcl::PointCloud<Cluster
     saveTimeToFile(clustering_time_log_path, time_taken);
 }
 
+/*
 template<typename PointT> inline
 void CloudSegmentation<PointT>::adaptiveVoxelClustering(const pcl::PointCloud<PointT>& cloudIn, 
                                                      std::vector<pcl::PointCloud<ClusterPointT>>& outputClusters, 
@@ -752,6 +753,102 @@ void CloudSegmentation<PointT>::adaptiveVoxelClustering(const pcl::PointCloud<Po
     std::chrono::duration<double> elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     time_taken = elapsed.count();
     saveTimeToFile(clustering_time_log_path, time_taken);
+}
+*/
+
+template<typename PointT> inline
+void CloudSegmentation<PointT>::adaptiveVoxelClustering(const pcl::PointCloud<PointT>& cloudIn, 
+                                                     std::vector<pcl::PointCloud<ClusterPointT>>& outputClusters, 
+                                                     double& time_taken) 
+{
+    auto start = std::chrono::steady_clock::now();
+
+    if (cloudIn.points.empty()) {
+        std::cerr << "Input cloud is empty! <- adaptiveVoxelClustering" << std::endl;
+        return;
+    }
+
+    outputClusters.clear();
+    outputClusters.reserve(cloudIn.size());
+
+    pcl::PointCloud<ClusterPointT> xyzCloud;
+    pcl::copyPointCloud(cloudIn, xyzCloud);
+
+    std::vector<float> regions(number_region, max_region_distance / number_region); 
+    std::vector<std::vector<int>> indices_array(number_region + 1); 
+
+    for (int i = 0; i < xyzCloud.size(); i++) {
+        float distance = std::sqrt(xyzCloud.points[i].x * xyzCloud.points[i].x + xyzCloud.points[i].y * xyzCloud.points[i].y);
+        int region_index = distance > max_region_distance ? number_region : static_cast<int>(distance / (max_region_distance / number_region));
+        indices_array[region_index].push_back(i);
+    }
+
+    double total_downsampling_time = 0.0;
+    double total_clustering_time = 0.0;
+
+    for (int i = 0; i <= number_region; i++) {
+        if (indices_array[i].empty()) continue;
+
+        pcl::PointCloud<ClusterPointT> cloudSegment;
+        for (int index : indices_array[i]) {
+            cloudSegment.points.push_back(xyzCloud.points[index]);
+        }
+
+        // 복셀화 적용
+        if (i != number_region) {
+            auto downsample_start = std::chrono::steady_clock::now();
+            
+            pcl::VoxelGrid<ClusterPointT> voxel_grid_filter;
+            float leaf_size = max_leaf_size - (i * (max_leaf_size - min_leaf_size) / (number_region - 1)); 
+            voxel_grid_filter.setLeafSize(leaf_size, leaf_size, leaf_size);
+            voxel_grid_filter.setInputCloud(boost::make_shared<pcl::PointCloud<ClusterPointT>>(cloudSegment));
+
+            pcl::PointCloud<ClusterPointT> downsampledCloud;
+            voxel_grid_filter.filter(downsampledCloud);
+            cloudSegment = downsampledCloud; 
+            
+            auto downsample_end = std::chrono::steady_clock::now();
+            total_downsampling_time += std::chrono::duration<double>(downsample_end - downsample_start).count();
+        }
+
+        // 클러스터링 수행
+        auto clustering_start = std::chrono::steady_clock::now();
+
+        pcl::search::KdTree<ClusterPointT> tree;
+        tree.setInputCloud(boost::make_shared<pcl::PointCloud<ClusterPointT>>(cloudSegment));
+
+        std::vector<pcl::PointIndices> cluster_indices;
+        pcl::EuclideanClusterExtraction<ClusterPointT> ec;
+        float tolerance = (i == number_region) ? max_tolerance : min_tolerance + (i * (max_tolerance - min_tolerance) / (number_region - 1)); 
+        ec.setClusterTolerance(tolerance);
+        ec.setMinClusterSize(adaptive_min_size);  
+        ec.setMaxClusterSize(adaptive_max_size);  
+        ec.setSearchMethod(boost::make_shared<pcl::search::KdTree<ClusterPointT>>(tree));
+        ec.setInputCloud(boost::make_shared<pcl::PointCloud<ClusterPointT>>(cloudSegment));
+        ec.extract(cluster_indices);
+
+        for (auto& indices : cluster_indices) {
+            pcl::PointCloud<ClusterPointT> cluster;
+            for (int idx : indices.indices) {
+                cluster.points.push_back(cloudSegment.points[idx]);
+            }
+            cluster.width = cluster.size();
+            cluster.height = 1;
+            cluster.is_dense = true;
+
+            outputClusters.push_back(cluster);
+        }
+
+        auto clustering_end = std::chrono::steady_clock::now();
+        total_clustering_time += std::chrono::duration<double>(clustering_end - clustering_start).count();
+    }
+
+    saveTimeToFile(downsampling_time_log_path, total_downsampling_time);
+    saveTimeToFile(clustering_time_log_path, total_clustering_time);
+
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    time_taken = elapsed.count();    
 }
 
 template<typename PointT> inline
