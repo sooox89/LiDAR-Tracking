@@ -4,6 +4,7 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
+        - /Global Options1
         - /TrackText1/Namespaces1
       Splitter Ratio: 0.5079365372657776
     Tree Height: 746
@@ -100,7 +101,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
@@ -115,7 +116,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -156,7 +157,7 @@ Visualization Manager:
       Color: 92; 53; 102
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
@@ -171,7 +172,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -184,7 +185,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
@@ -199,7 +200,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -212,7 +213,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
@@ -227,7 +228,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -240,7 +241,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 19; 99; 223
       Min Color: 0; 0; 0
@@ -255,12 +256,12 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: -0.29863473773002625
-        Min Value: -1.7169705629348755
+        Max Value: -0.3006815016269684
+        Min Value: -1.698053240776062
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -268,7 +269,7 @@ Visualization Manager:
       Color: 243; 243; 0
       Color Transformer: AxisColor
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
@@ -283,7 +284,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Class: rviz/Image
       Enabled: false
       Image Topic: /projectedimage
@@ -297,12 +298,12 @@ Visualization Manager:
       Unreliable: false
       Value: false
     - Class: jsk_rviz_plugin/BoundingBoxArray
-      Enabled: false
+      Enabled: true
       Name: ClusterBox
       Queue Size: 10
       Topic: /cloud_segmentation/cluster_box
       Unreliable: false
-      Value: false
+      Value: true
       alpha: 0.800000011920929
       color: 204; 0; 0
       coloring: Flat color
@@ -310,12 +311,12 @@ Visualization Manager:
       only edge: false
       show coords: false
     - Class: jsk_rviz_plugin/BoundingBoxArray
-      Enabled: false
+      Enabled: true
       Name: DeepBox
       Queue Size: 10
       Topic: /deep_box
       Unreliable: false
-      Value: false
+      Value: true
       alpha: 0.5
       color: 25; 255; 0
       coloring: Flat color
@@ -340,22 +341,22 @@ Visualization Manager:
       Marker Topic: /mobinha/visualize/visualize/track_text
       Name: TrackText
       Namespaces:
-        text: true
+        {}
       Queue Size: 1
       Value: true
     - Class: rviz/MarkerArray
-      Enabled: false
+      Enabled: true
       Marker Topic: /mobinha/visualize/visualize/track_model
       Name: TrackModel
       Namespaces:
         {}
       Queue Size: 1
-      Value: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 0; 0; 0
     Default Light: true
-    Fixed Frame: hesai_lidar
+    Fixed Frame: ego_car
     Frame Rate: 30
   Name: root
   Tools:
@@ -418,4 +419,4 @@ Window Geometry:
     collapsed: true
   Width: 1848
   X: 72
-  Y: 249
+  Y: 212
