@@ -1,6 +1,6 @@
 <launch>
   <!-- use_sim_time 설정 -->
-  <param name="/use_sim_time" value="false" /> <!-- rosbag 재생 시 -->
+  <param name="/use_sim_time" value="true" /> <!-- rosbag 재생 시 -->
 
   <!-- Arguments for topics and frames -->
   <arg name="lidar_topic" default="/lidar_points"/>
@@ -13,8 +13,9 @@
 
 
   <node name="inspva_to_imu" pkg="lidar_tracking" type="inspva_to_imu.py" output="screen">
-    <arg name="imu_topic" default="/imu/data_raw"/>
+    <param name="imu_topic" value="/imu/data_raw"/>
   </node>
+
 
   <!-- Cloud Segmentation 노드 -->
   <node name="cloud_segmentation" pkg="lidar_tracking" type="cloud_segmentation" output="screen">

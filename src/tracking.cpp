@@ -1,231 +1,155 @@
-
-/*
-#include <iostream>
-#include <csignal>
-#include "tracking/tracking.hpp"
-
-ros::Publisher pub_track_box, pub_track_text, pub_track_model, pub_track_test;
-
-// Track tracker;
-boost::shared_ptr<Tracking> Tracking_;  // Tracking 클래스의 객체를 boost::shared_ptr로 관리
-
-double t9, t10, t11, t12, t13, total;
-std::string fixed_frame;
-
-tf2_ros::Buffer tf_buffer;
-
-jsk_recognition_msgs::BoundingBoxArray cluster_bbox_array, deep_bbox_array, integration_bbox_array, filtered_bbox_array, 
-                                        output_bbox_array, track_bbox_array, transformed_bbox_array, corrected_bbox_array;
-visualization_msgs::MarkerArray track_text_array, track_model_array;
-
-std::string lidar_frame, target_frame, world_frame;
-
-ros::Time publish_stamp;
-
-void callbackCluster(const jsk_recognition_msgs::BoundingBoxArray::Ptr &bba_msg)
-{   
-    if (bba_msg->boxes.empty()) { return; }
-
-    cluster_bbox_array = *bba_msg;
-
-    Tracking_->integrationBbox(cluster_bbox_array, deep_bbox_array, integration_bbox_array, t9);
-    if (checkTransform(tf_buffer, world_frame, target_frame)) {
-        Tracking_->transformBbox(integration_bbox_array, tf_buffer, transformed_bbox_array, t10);
-        // Tracking_->cropHDMapBbox(transformed_bbox_array, filtered_bbox_array, bba_msg->header.stamp, t11);
-        // Tracking_->correctionBboxTF(track_bbox_array, bba_msg->header.stamp, ros::Time::now(), tf_buffer, corrected_bbox_array, t13);
-        fixed_frame = target_frame;
-        output_bbox_array = transformed_bbox_array;
-    } else {
-        fixed_frame = lidar_frame;
-        output_bbox_array = integration_bbox_array;
-    }
-
-    Tracking_->tracking(output_bbox_array, track_bbox_array, track_text_array, bba_msg->header.stamp, t12);
-    publish_stamp = ros::Time::now();
-    // Tracking_->correctionBboxRelativeSpeed(track_bbox_array, bba_msg->header.stamp, publish_stamp, corrected_bbox_array, t13);
-    
-    // pub_track_test.publish(bba2msg(filtered_bbox_array, publish_stamp, fixed_frame));
-    pub_track_box.publish(bba2msg(track_bbox_array, publish_stamp, fixed_frame));
-    pub_track_model.publish(bba2ma(track_bbox_array, publish_stamp, fixed_frame));
-    pub_track_text.publish(ta2msg(track_text_array, publish_stamp, fixed_frame));
-
-    total = ros::Time::now().toSec() - cluster_bbox_array.boxes[0].header.stamp.toSec();
-
-    std::cout << "\033[" << 18 << ";" << 30 << "H" << std::endl;
-    std::cout << "integration & crophdmap : " << t9+t10+t11 << "sec" << std::endl;
-    std::cout << "tracking : " << t12 << "sec" << std::endl;
-    std::cout << "correction : " << t13 << "sec" << std::endl;
-    // std::cout << "transform : " << t13 << "sec" << std::endl;
-    std::cout << "total : " << total << " sec" << std::endl;
-    std::cout << "fixed frame : " << fixed_frame << std::endl;
-    
-}
-
-void callbackDeep(const jsk_recognition_msgs::BoundingBoxArray::Ptr &bba_msg)
-{
-    if (bba_msg->boxes.empty()) { return; }
-
-    deep_bbox_array = *bba_msg;
-}
-
-void callbackWaypoints(const sensor_msgs::PointCloud2::Ptr &cloud_msg)
-{
-    Tracking_->updateWaypoints(cloud_msg);
-}
-
-int main(int argc, char** argv)
-{
-    ros::init(argc, argv, "tracking");
-    ros::NodeHandle nh;
-    ros::NodeHandle pnh("~");
-    tf2_ros::TransformListener tf_listener(tf_buffer);
-
-    pnh.param<std::string>("lidar_frame", lidar_frame, "hesai_lidar");
-    pnh.param<std::string>("target_frame", target_frame, "ego_car");
-    pnh.param<std::string>("world_frame", world_frame, "world");
-
-    pub_track_box = pnh.advertise<jsk_recognition_msgs::BoundingBoxArray>("/mobinha/perception/lidar/track_box", 10);
-    // pub_track_test = pnh.advertise<jsk_recognition_msgs::BoundingBoxArray>("/mobinha/perception/lidar/track_test", 10);
-    pub_track_text = pnh.advertise<visualization_msgs::MarkerArray>("/mobinha/visualize/visualize/track_text", 10);
-    pub_track_model = pnh.advertise<visualization_msgs::MarkerArray>("/mobinha/visualize/visualize/track_model", 10);
-
-    // Tracking 객체를 초기화
-    Tracking_ = boost::make_shared<Tracking>(pnh);
-
-    ros::Subscriber sub_cluster_box = nh.subscribe("/cloud_segmentation/cluster_box", 10, callbackCluster);
-    ros::Subscriber sub_deep_box = nh.subscribe("/deep_box", 10, callbackDeep);
-    ros::Subscriber sub_waypoints = nh.subscribe("/waypoints", 1, callbackWaypoints);
-
-    ros::spin();
-    return 0;
-}
-*/
-
-#include <iostream>
-#include <csignal>
-#include "tracking/tracking.hpp"
+#include <ros/ros.h>
+#include <jsk_recognition_msgs/BoundingBoxArray.h>
+#include <visualization_msgs/MarkerArray.h>
+#include <std_msgs/Bool.h>
+#include <cmath>
+#include <vector>
 #include <message_filters/subscriber.h>
-#include <message_filters/time_synchronizer.h>
+#include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 
-ros::Publisher pub_track_box, pub_track_text, pub_track_model, pub_track_test;
+// 퍼블리셔 선언
+ros::Publisher pub_track_box;
+ros::Publisher pub_hazard_warning;
+ros::Publisher pub_target_circles;
 
-// Track tracker;
-boost::shared_ptr<Tracking> Tracking_;  // Tracking 클래스의 객체를 boost::shared_ptr로 관리
-
-double t9, t10, t11, t12, t13, total;
-std::string fixed_frame;
-
-tf2_ros::Buffer tf_buffer;
-
-jsk_recognition_msgs::BoundingBoxArray cluster_bbox_array, deep_bbox_array, integration_bbox_array, filtered_bbox_array, 
-                                        output_bbox_array, track_bbox_array, transformed_bbox_array, corrected_bbox_array;
-visualization_msgs::MarkerArray track_text_array, track_model_array;
-
+// 프레임 및 파라미터
 std::string lidar_frame, target_frame, world_frame;
+std::vector<std::pair<float, float>> target_points;
+float radius;
 
-ros::Time publish_stamp;
-
-// ROI 필터링 함수 추가
+// ROI 필터링 함수
 void filterROI(const jsk_recognition_msgs::BoundingBoxArray& input_bbox_array,
                jsk_recognition_msgs::BoundingBoxArray& filtered_bbox_array) {
-    // ROI 범위 정의 (전방 15m, 좌우 5m)
-    const float x_min = -10.0f;  // 전방만 포함
-    const float x_max = 15.0f; // 최대 15m
-    const float y_min = -5.0f; // 좌측 -5m
-    const float y_max = 4.0f;  // 우측 5m
-    // LiDAR X축 -> ego_car Y축  , LiDAR Y축 -> ego_car X축
-    // const float x_min = -5.0f;  // 좌측 -5m
-    // const float x_max =  5.0f; // 우측 5m
-    // const float y_min = -10.0f; // 전방만 포함
-    // const float y_max = 15.0f;  // 최대 15m
+    const float x_min = -20.0f, x_max = 20.0f, y_min = -15.0f, y_max = 15.0f;
 
     filtered_bbox_array.header = input_bbox_array.header;
     filtered_bbox_array.boxes.clear();
 
     for (const auto& box : input_bbox_array.boxes) {
-        // 박스의 중심 좌표
-        float x = box.pose.position.x;
-        float y = box.pose.position.y;
-
-        // ROI 내에 포함되는 박스만 필터링
+        float x = box.pose.position.x, y = box.pose.position.y;
         if (x >= x_min && x <= x_max && y >= y_min && y <= y_max) {
             filtered_bbox_array.boxes.push_back(box);
         }
     }
 }
 
-// 동기화된 콜백 함수 수정
-void callbackSynchronized(const jsk_recognition_msgs::BoundingBoxArray::ConstPtr &cluster_bba_msg,
-                          const jsk_recognition_msgs::BoundingBoxArray::ConstPtr &deep_bba_msg)
-{
-    cluster_bbox_array = *cluster_bba_msg;
-    deep_bbox_array = *deep_bba_msg;
+// track_box 원 마커 중심 위험 판단
+void evaluateHazards(const jsk_recognition_msgs::BoundingBoxArray& track_box,
+                     const std::vector<std::pair<float, float>>& target_points,
+                     float radius, std_msgs::Bool& hazard_msg) {
+    hazard_msg.data = false;
 
-    // ROI 필터링 적용
-    jsk_recognition_msgs::BoundingBoxArray cluster_filtered_bbox_array;
-    jsk_recognition_msgs::BoundingBoxArray deep_filtered_bbox_array;
-    filterROI(cluster_bbox_array, cluster_filtered_bbox_array);
-    filterROI(deep_bbox_array, deep_filtered_bbox_array);
+    for (const auto& box : track_box.boxes) {
+        float x = box.pose.position.x, y = box.pose.position.y;
 
-    // 필터링된 데이터를 통합
-    Tracking_->integrationBbox(cluster_filtered_bbox_array, deep_filtered_bbox_array, integration_bbox_array, t9);
-
-    if (checkTransform(tf_buffer, world_frame, target_frame)) {
-        Tracking_->transformBbox(integration_bbox_array, tf_buffer, transformed_bbox_array, t10);
-        fixed_frame = target_frame;
-        output_bbox_array = transformed_bbox_array;
-    } else {
-        fixed_frame = lidar_frame;
-        output_bbox_array = integration_bbox_array;
+        for (const auto& target : target_points) {
+            float dx = x - target.first, dy = y - target.second;
+            if (std::sqrt(dx * dx + dy * dy) <= radius) {
+                ROS_WARN("Hazard detected near target point: [%.2f, %.2f]", x, y);
+                hazard_msg.data = true;
+                return;
+            }
+        }
     }
-
-    Tracking_->tracking(output_bbox_array, track_bbox_array, track_text_array, cluster_bba_msg->header.stamp, t12);
-    Tracking_->correctionBboxRelativeSpeed(track_bbox_array, cluster_bba_msg->header.stamp, publish_stamp, corrected_bbox_array, t13);
-
-    publish_stamp = ros::Time::now();
-
-    pub_track_box.publish(bba2msg(track_bbox_array, publish_stamp, fixed_frame));
-    pub_track_model.publish(bba2ma(track_bbox_array, publish_stamp, fixed_frame));
-    pub_track_text.publish(ta2msg(track_text_array, publish_stamp, fixed_frame));
-
-    total = ros::Time::now().toSec() - cluster_bba_msg->header.stamp.toSec();
-
-    std::cout << "\033[" << 18 << ";" << 30 << "H" << std::endl;
-    std::cout << "integration & transform : " << t9 + t10 << " sec" << std::endl;
-    std::cout << "tracking : " << t12 << " sec" << std::endl;
-    std::cout << "total : " << total << " sec" << std::endl;
-    std::cout << "fixed frame : " << fixed_frame << std::endl;
 }
 
-int main(int argc, char** argv)
-{
-    ros::init(argc, argv, "tracking");
-    ros::NodeHandle nh;
-    ros::NodeHandle pnh("~");
-    tf2_ros::TransformListener tf_listener(tf_buffer);
+// Target Points 원 시각화
+void visualizeTargetPoints(const std::vector<std::pair<float, float>>& target_points, float radius) {
+    visualization_msgs::MarkerArray marker_array;
 
+    for (size_t i = 0; i < target_points.size(); ++i) {
+        const auto& point = target_points[i];
+
+        visualization_msgs::Marker circle_marker;
+        circle_marker.header.frame_id = target_frame;
+        circle_marker.header.stamp = ros::Time::now();
+        circle_marker.ns = "target_circles";
+        circle_marker.id = i;
+        circle_marker.type = visualization_msgs::Marker::CYLINDER;
+        circle_marker.action = visualization_msgs::Marker::ADD;
+
+        circle_marker.pose.position.x = point.first;
+        circle_marker.pose.position.y = point.second;
+        circle_marker.pose.position.z = 0.0;
+
+        circle_marker.scale.x = radius * 2.0; // 원 지름
+        circle_marker.scale.y = radius * 2.0; // 원 지름
+        circle_marker.scale.z = 0.1;          // 두께
+
+        circle_marker.color.r = 0.0f;
+        circle_marker.color.g = 1.0f;
+        circle_marker.color.b = 0.0f;
+        circle_marker.color.a = 0.5f; // 투명도
+
+        marker_array.markers.push_back(circle_marker);
+    }
+
+    pub_target_circles.publish(marker_array);
+}
+
+// Target Points 업데이트 콜백
+void targetPointsCallback(const visualization_msgs::MarkerArray::ConstPtr& msg) {
+    target_points.clear();
+
+    for (const auto& marker : msg->markers) {
+        float x = marker.pose.position.x;
+        float y = marker.pose.position.y;
+        target_points.emplace_back(x, y);
+    }
+
+    // 업데이트된 Target Points 시각화
+    visualizeTargetPoints(target_points, radius);
+}
+
+// Synchronized Callback
+void synchronizedCallback(const jsk_recognition_msgs::BoundingBoxArray::ConstPtr& cluster_bba_msg,
+                          const jsk_recognition_msgs::BoundingBoxArray::ConstPtr& deep_bba_msg) {
+    // Process track_box
+    jsk_recognition_msgs::BoundingBoxArray track_bbox_array = *cluster_bba_msg;
+
+    std_msgs::Bool hazard_msg;
+    evaluateHazards(track_bbox_array, target_points, radius, hazard_msg);
+    pub_hazard_warning.publish(hazard_msg);
+
+    // Process deep_box
+    jsk_recognition_msgs::BoundingBoxArray deep_bbox_array = *deep_bba_msg;
+    jsk_recognition_msgs::BoundingBoxArray filtered_deep_bbox_array;
+    filterROI(deep_bbox_array, filtered_deep_bbox_array);
+
+    for (const auto& box : filtered_deep_bbox_array.boxes) {
+        float speed = box.value; // 속도 정보 포함 가정
+        if (speed > 5.0f) { 
+            ROS_INFO("Dynamic obstacle detected: speed %.2f m/s", speed);
+            // 추가적인 위험 판단 및 퍼블리시 가능
+        }
+    }
+}
+
+int main(int argc, char** argv) {
+    ros::init(argc, argv, "tracking_with_roi");
+    ros::NodeHandle nh, pnh("~");
+
+    // 파라미터 로드
+    pnh.param("radius", radius, 2.0f);
     pnh.param<std::string>("lidar_frame", lidar_frame, "hesai_lidar");
     pnh.param<std::string>("target_frame", target_frame, "ego_car");
     pnh.param<std::string>("world_frame", world_frame, "world");
 
+    // 퍼블리셔 초기화
     pub_track_box = pnh.advertise<jsk_recognition_msgs::BoundingBoxArray>("/mobinha/perception/lidar/track_box", 10);
-    pub_track_text = pnh.advertise<visualization_msgs::MarkerArray>("/mobinha/visualize/visualize/track_text", 10);
-    pub_track_model = pnh.advertise<visualization_msgs::MarkerArray>("/mobinha/visualize/visualize/track_model", 10);
+    pub_hazard_warning = pnh.advertise<std_msgs::Bool>("/mobinha/hazard_warning", 10);
+    pub_target_circles = pnh.advertise<visualization_msgs::MarkerArray>("/mobinha/circles_viz", 10);
 
-    // Tracking 객체를 초기화
-    Tracking_ = boost::make_shared<Tracking>(pnh);
-
-    // message_filters를 사용하여 토픽 구독 및 동기화 설정
+    // 서브스크라이버 초기화
     message_filters::Subscriber<jsk_recognition_msgs::BoundingBoxArray> sub_cluster_box(nh, "/cloud_segmentation/cluster_box", 10);
     message_filters::Subscriber<jsk_recognition_msgs::BoundingBoxArray> sub_deep_box(nh, "/deep_box", 10);
+    ros::Subscriber sub_target_points = nh.subscribe("/target_points", 10, targetPointsCallback);
 
+    // 메시지 동기화 설정
     typedef message_filters::sync_policies::ApproximateTime<jsk_recognition_msgs::BoundingBoxArray, jsk_recognition_msgs::BoundingBoxArray> SyncPolicy;
     message_filters::Synchronizer<SyncPolicy> sync(SyncPolicy(10), sub_cluster_box, sub_deep_box);
-    sync.registerCallback(boost::bind(&callbackSynchronized, _1, _2));
-
-    // Waypoints 구독
-    ros::Subscriber sub_waypoints = nh.subscribe("/waypoints", 1, &Tracking::updateWaypoints, Tracking_.get());
+    sync.registerCallback(synchronizedCallback);
 
     ros::spin();
     return 0;
