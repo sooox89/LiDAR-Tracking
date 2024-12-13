@@ -21,7 +21,6 @@ from jsk_rviz_plugins.msg import OverlayText
 from scipy.spatial.transform import Rotation as R
 
 from utils import *
-
 # lidar_tracking 패키지의 경로를 가져옴
 package_path = roslib.packages.get_pkg_dir('lidar_tracking')
 dae_path = os.path.join(package_path, 'urdf/car.dae')  # car.dae 파일 경로 설정
@@ -129,7 +128,8 @@ class Integration:
         # 자차 정보 텍스트 설정
         # text = "Position:\nx: {:.2f}\ny: {:.2f}\nazimuth: {:.2f}\n\nSpeed:\nvx: {:.2f} m/s\nvy: {:.2f} m/s".format(x, y, azimuth, vx, vy)
         v = math.sqrt(vx**2 + vy**2) # 속도 크기 계산
-        text = "Position:\nx: {:.2f}\ny: {:.2f}\nazimuth: {:.2f}\n\nSpeed: {:.2f} m/s".format(x, y, azimuth, v)
+        v = v * 3.6 # 속도 m/s에서 km/h로 단위 변경
+        text = "Position:\nx: {:.2f}\ny: {:.2f}\nazimuth: {:.2f}\n\nSpeed: {:.2f} km/h".format(x, y, azimuth, v)
         overlay_text = OverlayText()
         overlay_text.action = OverlayText.ADD
         overlay_text.width = 400

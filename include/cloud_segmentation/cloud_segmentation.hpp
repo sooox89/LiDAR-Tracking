@@ -1,3 +1,4 @@
+#pragma once
 #include "utils.hpp"
 #include "patchworkpp/patchworkpp.hpp"
 
@@ -9,7 +10,6 @@ public:
     CloudSegmentation() {};
 
     CloudSegmentation(ros::NodeHandle& nh) : nh_(nh) {
-        nh_.getParam("Public/map", map);
         nh_.getParam("Public/lidar_frame", lidar_frame);
         nh_.getParam("Public/target_frame", target_frame);
         nh_.getParam("Public/world_frame", world_frame);
@@ -18,6 +18,13 @@ public:
         nh_.getParam("Cloud_Segmentation/lidar_settings/ang_res_x", ang_res_x);
         nh_.getParam("Cloud_Segmentation/lidar_settings/ang_res_y", ang_res_y);
         nh_.getParam("Cloud_Segmentation/lidar_settings/ang_bottom", ang_bottom);
+        nh_.getParam("Cloud_Segmentation/crop/max/x", roi_max_x);
+        nh_.getParam("Cloud_Segmentation/crop/max/y", roi_max_y);
+        nh_.getParam("Cloud_Segmentation/crop/max/z", roi_max_z);
+        nh_.getParam("Cloud_Segmentation/crop/min/x", roi_min_x);
+        nh_.getParam("Cloud_Segmentation/crop/min/y", roi_min_y);
+        nh_.getParam("Cloud_Segmentation/crop/min/z", roi_min_z);
+        nh_.getParam("Cloud_Segmentation/ground_removal/fp_distance", fp_distance);
         nh_.getParam("Cloud_Segmentation/downsampling/leaf_size/x", leaf_size_x);
         nh_.getParam("Cloud_Segmentation/downsampling/leaf_size/y", leaf_size_y);
         nh_.getParam("Cloud_Segmentation/downsampling/leaf_size/z", leaf_size_z);
@@ -37,12 +44,6 @@ public:
         nh_.getParam("Cloud_Segmentation/clustering/adaptive/max_leaf_size", max_leaf_size);
         nh_.getParam("Cloud_Segmentation/clustering/adaptive/thresh_iou", thresh_iou);
         nh_.getParam("Cloud_Segmentation/clustering/L_shape_fitting/projection_range", projection_range);
-        nh_.getParam("Cloud_Segmentation/crop/max/x", roi_max_x);
-        nh_.getParam("Cloud_Segmentation/crop/max/y", roi_max_y);
-        nh_.getParam("Cloud_Segmentation/crop/max/z", roi_max_z);
-        nh_.getParam("Cloud_Segmentation/crop/min/x", roi_min_x);
-        nh_.getParam("Cloud_Segmentation/crop/min/y", roi_min_y);
-        nh_.getParam("Cloud_Segmentation/crop/min/z", roi_min_z);
         nh_.getParam("Cloud_Segmentation/crop/crop_ring/enabled", crop_ring_enabled);
         nh_.getParam("Cloud_Segmentation/crop/crop_ring/ring", crop_ring);
         nh_.getParam("Cloud_Segmentation/crop/crop_intensity/enabled", crop_intensity_enabled);
@@ -52,7 +53,7 @@ public:
         global_path = map_reader(map.c_str());
 
         // lidar
-        dt_l_c_ = 0.05;
+        dt_l_c_ = 0.1;
         cur_stamp = ros::Time(0);
         pre_stamp = ros::Time(0);
 
@@ -82,13 +83,13 @@ public:
     }
 
     void msgToPointCloud(const sensor_msgs::PointCloud2::Ptr &cloud_msg, pcl::PointCloud<PointT>& cloud);
-    void imuUpdate(const sensor_msgs::Imu::ConstPtr &imu_msg);
+    void updateImu(const sensor_msgs::Imu::ConstPtr &imu_msg);
     void projectPointCloud(const pcl::PointCloud<PointT>& cloudIn, pcl::PointCloud<PointT>& cloudOut, double &time_taken);
     void convertPointCloudToImage(const pcl::PointCloud<PointT>& cloudIn, cv::Mat &imageOut, double &time_taken);
     void cropPointCloud(const pcl::PointCloud<PointT>& cloudIn, pcl::PointCloud<PointT>& cloudOut, double &time_taken);
     void cropHDMapPointCloud(const pcl::PointCloud<PointT>& cloudIn, pcl::PointCloud<PointT>& cloudOut, 
                             tf2_ros::Buffer &tf_buffer, double &time_taken);
-    void removalGroundPointCloud(const pcl::PointCloud<PointT>& cloudIn, pcl::PointCloud<PointT>& cloudOut, double &time_taken);
+    void removalGroundPointCloud(const pcl::PointCloud<PointT>& cloudIn, pcl::PointCloud<PointT>& cloudOut, pcl::PointCloud<PointT>& groundOut, double &time_taken);
     void undistortPointCloud(const pcl::PointCloud<PointT>& cloudIn, pcl::PointCloud<PointT>& cloudOut, double &time_taken);
     
     // CUDA-PointPillars
@@ -118,6 +119,22 @@ private:
     float ang_res_y; // Angular resolution in y direction (degrees)
     int ang_bottom; // Bottom angle (degrees)
 
+    // Region of Interest (ROI) settings
+    float roi_max_x; // Maximum x dimension for ROI
+    float roi_max_y; // Maximum y dimension for ROI
+    float roi_max_z; // Maximum z dimension for ROI
+    float roi_min_x; // Minimum x dimension for ROI
+    float roi_min_y; // Minimum y dimension for ROI
+    float roi_min_z; // Minimum z dimension for ROI
+    bool crop_ring_enabled; // Enable cropping by ring number
+    int crop_ring; // Specific ring number to crop
+    bool crop_intensity_enabled; // Enable cropping by intensity
+    float crop_intensity; // Intensity threshold for cropping
+    float crop_hd_map_radius; // Radius for HD map-based cropping
+
+    // Ground Removal parameters
+    float fp_distance;
+
     // Downsampling parameters
     float leaf_size_x; // Leaf size for downsampling in x dimension
     float leaf_size_y; // Leaf size for downsampling in y dimension
@@ -145,19 +162,6 @@ private:
     
     // L-shape fitting parameters
     float projection_range; // Projection range for L-shape fitting
-
-    // Region of Interest (ROI) settings
-    float roi_max_x; // Maximum x dimension for ROI
-    float roi_max_y; // Maximum y dimension for ROI
-    float roi_max_z; // Maximum z dimension for ROI
-    float roi_min_x; // Minimum x dimension for ROI
-    float roi_min_y; // Minimum y dimension for ROI
-    float roi_min_z; // Minimum z dimension for ROI
-    bool crop_ring_enabled; // Enable cropping by ring number
-    int crop_ring; // Specific ring number to crop
-    bool crop_intensity_enabled; // Enable cropping by intensity
-    float crop_intensity; // Intensity threshold for cropping
-    float crop_hd_map_radius; // Radius for HD map-based cropping
 
     // lidar
     ros::Time cur_stamp;
@@ -199,7 +203,7 @@ void CloudSegmentation<PointT>::msgToPointCloud(const sensor_msgs::PointCloud2::
 }
 
 template<typename PointT> inline
-void CloudSegmentation<PointT>::imuUpdate(const sensor_msgs::Imu::ConstPtr &imu_msg)
+void CloudSegmentation<PointT>::updateImu(const sensor_msgs::Imu::ConstPtr &imu_msg)
 {   
     imu_cache.add(imu_msg);
 }
@@ -267,7 +271,6 @@ void CloudSegmentation<PointT>::projectPointCloud(const pcl::PointCloud<PointT>&
     saveTimeToFile(projection_time_log_path, time_taken);
 }
 
-
 template<typename PointT> inline
 void CloudSegmentation<PointT>::convertPointCloudToImage(const pcl::PointCloud<PointT>& cloudIn, cv::Mat& imageOut, double& time_taken) 
 {
@@ -319,8 +322,8 @@ void CloudSegmentation<PointT>::cropPointCloud(const pcl::PointCloud<PointT>& cl
         if (crop_intensity_enabled && point.intensity < crop_intensity) { continue; }
         
         // Car exclusion
-        if (point.x >= -10.0 && point.x <= 2.0 &&
-            point.y >= -0.8 && point.y <= 0.8) { continue; }
+        if (point.x >= -2.3 && point.x <= 2.3 &&
+            point.y >= -0.9 && point.y <= 0.9) { continue; }
 
         // Rectangle
         if (point.x >= roi_min_x && point.x <= roi_max_x &&
@@ -426,7 +429,7 @@ void CloudSegmentation<PointT>::cropHDMapPointCloud(const pcl::PointCloud<PointT
 }
 
 template<typename PointT> inline
-void CloudSegmentation<PointT>::removalGroundPointCloud(const pcl::PointCloud<PointT>& cloudIn, pcl::PointCloud<PointT>& cloudOut, double& time_taken)
+void CloudSegmentation<PointT>::removalGroundPointCloud(const pcl::PointCloud<PointT>& cloudIn, pcl::PointCloud<PointT>& cloudOut, pcl::PointCloud<PointT>& groundOut, double& time_taken)
 {
     auto start = std::chrono::steady_clock::now();
 
@@ -435,14 +438,24 @@ void CloudSegmentation<PointT>::removalGroundPointCloud(const pcl::PointCloud<Po
         return;
     }
 
-    pcl::PointCloud<PointT> groundCloud;
-    PatchworkppGroundSeg->estimate_ground(cloudIn, groundCloud, cloudOut, time_taken);
+    pcl::PointCloud<PointT> groundCloud, nongroundCloud;
+    PatchworkppGroundSeg->estimate_ground(cloudIn, groundCloud, nongroundCloud, time_taken);
+
+    // 근거리 지면 오인식 필터링
+    for (const auto& pt : groundCloud.points) {
+        double range = sqrt(pt.x * pt.x + pt.y * pt.y);
+        if (range <= fp_distance && pt.z > roi_min_z + 0.3) {
+            nongroundCloud.push_back(pt);
+        }
+    }
+
+    cloudOut = nongroundCloud;
+    groundOut = groundCloud; // 추가된 부분
 
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;
     time_taken = elapsed_seconds.count();
     saveTimeToFile(removalground_time_log_path, time_taken);
-
 }
 
 template<typename PointT> inline
@@ -927,4 +940,3 @@ void CloudSegmentation<PointT>::fittingLShape(const std::vector<pcl::PointCloud<
     time_taken = elapsed_seconds.count();
     saveTimeToFile(lshape_time_log_path, time_taken);
 }
-

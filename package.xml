@@ -6,15 +6,12 @@
 
   <maintainer email="rbtjr98@inha.edu">GyuSeok Lee</maintainer>
 
+
   <!-- One license tag required, multiple allowed, one license per tag -->
   <!-- Commonly used license strings: -->
   <!--   BSD, MIT, Boost Software License, GPLv2, GPLv3, LGPLv2.1, LGPLv3 -->
   <license>TODO</license>
-
-  <!-- 빌드 툴 의존성 -->
   <buildtool_depend>catkin</buildtool_depend>
-
-  <!-- 실행 의존성 추가 -->
   <exec_depend>message_generation</exec_depend>
   <exec_depend>libpcl-all</exec_depend>
   <exec_depend>roscpp</exec_depend>
@@ -27,10 +24,6 @@
   <exec_depend>laser_geometry</exec_depend>
   <exec_depend>pcl_conversions</exec_depend>
   <exec_depend>pcl_ros</exec_depend>
-  <exec_depend>novatel_oem7_msgs</exec_depend>  <!-- 추가된 의존성 -->
-  <exec_depend>tf</exec_depend>                 <!-- 추가된 의존성 -->
-
-  <!-- 빌드 의존성 추가 -->
   <build_depend>roscpp</build_depend>
   <build_depend>rospy</build_depend>
   <build_depend>std_msgs</build_depend>
@@ -44,11 +37,11 @@
   <build_depend>laser_geometry</build_depend>
   <build_depend>pcl_conversions</build_depend>
   <build_depend>pcl_ros</build_depend>
-  <build_depend>novatel_oem7_msgs</build_depend>  <!-- 추가된 의존성 -->
-  <build_depend>tf</build_depend>                 <!-- 추가된 의존성 -->
+
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
     <!-- Other tools can request additional information be placed here -->
+
   </export>
 </package>

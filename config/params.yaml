@@ -49,11 +49,11 @@ Cloud_Segmentation:
     max:
       x: 100.0
       y: 40.0
-      z: 2.5
+      z: 0.3
     min:
-      x: -100.0
+      x: -80.0
       y: -40.0
-      z: -1.4
+      z: -2.2
     crop_ring:
       enabled: false
       ring: 2
@@ -63,16 +63,19 @@ Cloud_Segmentation:
     crop_hd_map:
       radius: 5.0
 
+  ground_removal:
+    fp_distance: 5
+
 Tracking:
   integration:
-    mode: 0 # 0: integration, 1: cluster, 2: deep
+    mode:  0 # 0: integration, 1: cluster, 2: deep
     thresh_iou: 0.1
   crop_hd_map:
     number_front_node: 200
     number_back_node: 200
-    radius: 4.0
+    radius: 1.8
   track:
-    invisibleCnt: 20
+    invisibleCnt: 10
     deque:
       number_velocity: 3
       number_orientation: 10

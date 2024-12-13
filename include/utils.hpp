@@ -112,9 +112,9 @@ visualization_msgs::MarkerArray ta2msg(const visualization_msgs::MarkerArray& ta
     for (const auto& marker : ta.markers)
     {
         visualization_msgs::Marker temp_marker = marker;
-        temp_marker.header.stamp = stamp;
+        temp_marker.header.stamp = stamp;     
         temp_marker.header.frame_id = frame_id;
-        temp_marker.lifetime = ros::Duration(0.1);
+        temp_marker.lifetime = ros::Duration(0.05);
         ta_ROS.markers.push_back(temp_marker);
     }
 
@@ -462,15 +462,15 @@ void clearLogFile(const std::string& file_path)
 // for experiment
 void saveTimeToFile(const std::string& timing_file, double time_taken) 
 {   
-    std::ofstream file(timing_file, std::ios::app);
+    // std::ofstream file(timing_file, std::ios::app);
 
-    if (!file.is_open()) {
-        std::cerr << "Error opening file: " << timing_file << std::endl;
-        return;
-    }
+    // if (!file.is_open()) {
+    //     std::cerr << "Error opening file: " << timing_file << std::endl;
+    //     return;
+    // }
 
-    file << time_taken << "\n";
-    file.close();
+    // file << time_taken << "\n";
+    // file.close();
 }
 
 double calculateAverageTime(const std::string& timing_file) 
@@ -506,6 +506,109 @@ double calculateAverageTime(const std::string& timing_file)
 
 /*
 // no use
+void EuclideanClustering(const pcl::PointCloud<pcl::PointXYZ>::Ptr &cloudIn, 
+                            std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &outputClusters, double &time_taken)
+{
+    auto start = std::chrono::steady_clock::now();
+
+    if (cloudIn->points.empty()) {
+        std::cerr << "Input cloud is empty! <- EuclideanClustering" << std::endl;
+        return;
+    }
+
+    outputClusters.clear();
+
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
+
+    // mingu
+    tree->setInputCloud(cloudIn);
+
+    std::vector<pcl::PointIndices> clusterIndices;
+    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+    ec.setClusterTolerance(clusterTolerance);
+    ec.setMinClusterSize(minSize);
+    ec.setMaxClusterSize(maxSize);
+    ec.setSearchMethod(tree);
+    // mingu
+    ec.setInputCloud(cloudIn);
+
+    ec.extract(clusterIndices);
+
+    for(pcl::PointIndices getIndices: clusterIndices)
+    {
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloudCluster (new pcl::PointCloud<pcl::PointXYZ>);
+        for (int index : getIndices.indices)
+            // mingu
+            cloudCluster->points.push_back (cloudIn->points[index]);
+
+        cloudCluster->width = cloudCluster->points.size();
+        cloudCluster->height = 1;
+        cloudCluster->is_dense = true;
+
+        // size filtering
+        pcl::PointXYZ minPt, maxPt;
+        pcl::getMinMax3D(*cloudCluster, minPt, maxPt);
+        double clusterSizeX = maxPt.x - minPt.x;
+        double clusterSizeY = maxPt.y - minPt.y;
+        double clusterSizeZ = maxPt.z - minPt.z;
+
+        if (clusterSizeX > minClusterSizeX && clusterSizeX < maxClusterSizeX
+        && clusterSizeY > minClusterSizeY && clusterSizeY < maxClusterSizeY
+        && clusterSizeZ > minClusterSizeZ && clusterSizeZ < maxClusterSizeZ) 
+        {           
+            outputClusters.push_back(cloudCluster);
+        }
+    }
+
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed_seconds = end - start;
+    time_taken = elapsed_seconds.count();
+}
+
+#include "depth_clustering/depth_cluster.h"
+void depthClustering(const pcl::PointCloud<PointType>::Ptr &cloudIn, 
+                    std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &outputClusters, double &time_taken)
+{
+    auto start = std::chrono::steady_clock::now();
+
+    if (cloudIn->points.empty()) {
+        std::cerr << "Input cloud is empty!" << std::endl;
+        return;
+    }
+
+    DepthCluster depthCluster(vertical_resolution, horizontal_resolution, lidar_lines, cluster_size);
+
+    // 입력 포인트 클라우드 설정
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloudInXYZI(new pcl::PointCloud<pcl::PointXYZI>);
+    copyPointCloud(*cloudIn, *cloudInXYZI); // PointType에서 XYZI로 변환
+    depthCluster.setInputCloud(cloudInXYZI);
+
+    // 클러스터 추출 실행
+    auto clusters_indices = depthCluster.getClustersIndex();
+
+    // 결과 클러스터 추출
+    outputClusters.clear();
+    for (const auto& indices : clusters_indices) {
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloudCluster(new pcl::PointCloud<pcl::PointXYZ>);
+        for (int index : indices) {
+            // cloudCluster->points.push_back(cloudIn->points[index]);
+            pcl::PointXYZ point;
+            point.x = cloudIn->points[index].x;
+            point.y = cloudIn->points[index].y;
+            point.z = cloudIn->points[index].z;
+            cloudCluster->points.push_back(point);
+        }
+        cloudCluster->width = cloudCluster->points.size();
+        cloudCluster->height = 1;
+        cloudCluster->is_dense = true;
+        outputClusters.push_back(cloudCluster);
+    }
+
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed_seconds = end - start;
+    time_taken = elapsed_seconds.count();
+}
+
 // L-shape Fitting 과 비교용
 void fittingPCA(const std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &inputClusters, const ros::Time &input_stamp, 
                 jsk_recognition_msgs::BoundingBoxArray &output_bbox_array, double &time_taken)

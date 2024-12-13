@@ -28,3 +28,27 @@ min : 0.0015879 sec
 max: 0.0145075 sec
 average: 0.0038347 sec
 
+projection : 0
+converstion : 0
+crop : 0
+ground removal : 0
+undistortion : 0
+downsampling : 0
+clustering : 0
+Lshape fitting : 0
+projection : 0.0326709
+converstion : 0.000296617
+crop : 0.000839852
+ground removal : 0.0103629
+undistortion : 0.00322091
+downsampling : 0.00247931
+clustering : 0.0300694
+Lshape fitting : 0.00975662
+projection : 0.0323354
+converstion : 0.000235779
+crop : 0.000784211
+ground removal : 0.0117647
+undistortion : 0.00441199
+downsampling : 0.00301328
+clustering : 0.033516
+Lshape fitting : 0.00933141
