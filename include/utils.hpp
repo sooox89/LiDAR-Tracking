@@ -13,6 +13,7 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf/tf.h>
 
+#include "point_type/velodyne_point.h"
 #include "point_type/os_point.h"
 #include "point_type/hesai_point.h"
 
@@ -36,6 +37,7 @@
 #include <message_filters/cache.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
+#include <message_filters/sync_policies/approximate_time.h>
 
 template<typename PointT>
 sensor_msgs::PointCloud2 cloud2msg(const pcl::PointCloud<PointT> &cloud, 
@@ -95,13 +97,20 @@ sensor_msgs::PointCloud2 cluster2msg(const std::vector<pcl::PointCloud<PointT>>&
     return output_msg;
 }
 
-jsk_recognition_msgs::BoundingBoxArray bba2msg(const jsk_recognition_msgs::BoundingBoxArray bba, 
+jsk_recognition_msgs::BoundingBoxArray bba2msg(const jsk_recognition_msgs::BoundingBoxArray &bba, 
                                                 const ros::Time &stamp, const std::string &frame_id)
 {
     jsk_recognition_msgs::BoundingBoxArray bba_ROS;
     bba_ROS.header.stamp = stamp;
     bba_ROS.header.frame_id = frame_id;
-    bba_ROS.boxes = bba.boxes;
+
+    for (const auto &box : bba.boxes) {
+        jsk_recognition_msgs::BoundingBox bbox = box;
+        bbox.header.stamp = stamp;
+        bbox.header.frame_id = frame_id;
+        bba_ROS.boxes.push_back(bbox);
+    }
+
     return bba_ROS;
 }
 
@@ -112,9 +121,9 @@ visualization_msgs::MarkerArray ta2msg(const visualization_msgs::MarkerArray& ta
     for (const auto& marker : ta.markers)
     {
         visualization_msgs::Marker temp_marker = marker;
-        temp_marker.header.stamp = stamp;     
+        temp_marker.header.stamp = stamp;
         temp_marker.header.frame_id = frame_id;
-        temp_marker.lifetime = ros::Duration(0.05);
+        temp_marker.lifetime = ros::Duration(0.1);
         ta_ROS.markers.push_back(temp_marker);
     }
 
@@ -139,27 +148,30 @@ visualization_msgs::MarkerArray bba2ma(const jsk_recognition_msgs::BoundingBoxAr
         marker.action = visualization_msgs::Marker::ADD;
         marker.pose.position = bbox.pose.position;
 
-        // 1 : Car, 2 : Truck, 3 : Motorcycle
+        // 1 : Car, 2 : Truck or Pedestrian, 3 : Motorcycle
         if (bbox.label == 1)
         {
             marker.type = visualization_msgs::Marker::MESH_RESOURCE;
-            marker.mesh_resource = "package://lidar_tracking/urdf/car.dae";
-            marker.scale.x = 1.7;
-            marker.scale.y = 2.1;
-            marker.scale.z = 1.6;
-            marker.color.r = 0.5;
-            marker.color.g = 0.5;
-            marker.color.b = 0.5;
-            marker.color.a = 2.0;
+            marker.mesh_resource = "package://lidar_tracking/urdf/mesh_car.dae";
+            marker.scale.x = 1.0;
+            marker.scale.y = 1.0;
+            marker.scale.z = 1.0;
+            marker.color.r = 0.0;
+            marker.color.g = 0.98;
+            marker.color.b = 1.0;
+            marker.color.a = 0.7;
+
+            marker.pose.position.z -= 1.0;
         }
+
         else if (bbox.label == 2)
         {
-            marker.type = visualization_msgs::Marker::SPHERE;
+            marker.type = visualization_msgs::Marker::CYLINDER;
             marker.scale = bbox.dimensions;
             marker.color.r = 0.0;
             marker.color.g = 0.0;
             marker.color.b = 1.0;
-            marker.color.a = 0.0;
+            marker.color.a = 1.0;
         }
         else if (bbox.label == 3)
         {
@@ -293,62 +305,6 @@ Eigen::Quaterniond calculateRotationBetweenStamps(const std::deque<sensor_msgs::
     return rotation_increment.unit_quaternion();
 }
 
-geometry_msgs::PoseStamped getENU(const message_filters::Cache<geometry_msgs::PoseStamped>& enu_cache, const ros::Time& input_stamp)
-{
-    // 가장 가까운 PoseStamped를 찾기 위한 변수 초기화
-    geometry_msgs::PoseStamped closest_pose;
-
-    // input_stamp 이전의 가장 가까운 PoseStamped
-    boost::shared_ptr<geometry_msgs::PoseStamped const> pose_before = enu_cache.getElemBeforeTime(input_stamp);
-    // input_stamp 이후의 가장 가까운 PoseStamped
-    boost::shared_ptr<geometry_msgs::PoseStamped const> pose_after = enu_cache.getElemAfterTime(input_stamp);
-
-    // 두 PoseStamped 중 input_stamp와 더 가까운 것을 선택
-    if (pose_before && pose_after)
-    {
-        // time difference 계산
-        ros::Duration diff_before = input_stamp - pose_before->header.stamp;
-        ros::Duration diff_after = pose_after->header.stamp - input_stamp;
-
-        // 더 가까운 PoseStamped를 선택
-        if (diff_before < diff_after)
-        {
-            closest_pose = *pose_before;
-        }
-        else
-        {
-            closest_pose = *pose_after;
-        }
-    }
-    // pose_before만 존재하는 경우
-    else if (pose_before)
-    {
-        closest_pose = *pose_before;
-    }
-    // pose_after만 존재하는 경우
-    else if (pose_after)
-    {
-        closest_pose = *pose_after;
-    }
-    else
-    {
-        // enu_cache에 적절한 값이 없는 경우
-        // 캐시 내에서 가장 최근 값을 가져오기 위해 마지막 요소를 찾음
-        boost::shared_ptr<geometry_msgs::PoseStamped const> last_pose = enu_cache.getElemAfterTime(ros::Time(0));
-        if (last_pose)
-        {
-            closest_pose = *last_pose;  // 가장 최근 데이터를 선택
-            ROS_WARN("No matching PoseStamped found. Returning the most recent data.");
-        }
-        else
-        {
-            ROS_WARN("No matching PoseStamped found in the cache, and no recent data available.");
-        }
-    }
-
-    return closest_pose;
-}
-
 std::vector<std::pair<float, float>> map_reader(std::string map_path)
 {
     Json::Value root;      
@@ -393,10 +349,10 @@ void transformMsgToEigen(const geometry_msgs::Transform &transform_msg, Eigen::A
                            transform_msg.rotation.y, transform_msg.rotation.z);
 }
 
-bool checkTransform(tf2_ros::Buffer &tf_buffer, const std::string &lidar_frame, const std::string &target_frame)
+bool checkTransform(tf2_ros::Buffer &tf_buffer, const std::string &frame_id, const std::string &child_frame_id)
 {
     try {
-        geometry_msgs::TransformStamped TransformStamped = tf_buffer.lookupTransform(target_frame, lidar_frame, ros::Time(0));
+        geometry_msgs::TransformStamped TransformStamped = tf_buffer.lookupTransform(frame_id, child_frame_id, ros::Time(0));
         return true;
     }
     catch (tf2::TransformException &ex) {
@@ -462,197 +418,13 @@ void clearLogFile(const std::string& file_path)
 // for experiment
 void saveTimeToFile(const std::string& timing_file, double time_taken) 
 {   
-    // std::ofstream file(timing_file, std::ios::app);
-
-    // if (!file.is_open()) {
-    //     std::cerr << "Error opening file: " << timing_file << std::endl;
-    //     return;
-    // }
-
-    // file << time_taken << "\n";
-    // file.close();
-}
-
-double calculateAverageTime(const std::string& timing_file) 
-{
-    std::ifstream file(timing_file);
+    std::ofstream file(timing_file, std::ios::app);
 
     if (!file.is_open()) {
         std::cerr << "Error opening file: " << timing_file << std::endl;
-        return -1;
+        return;
     }
 
-    std::vector<double> times;
-    double time;
-
-    // 파일에서 시간을 읽어와 벡터에 저장
-    while (file >> time) {
-        times.push_back(time);
-    }
-
+    file << time_taken << "\n";
     file.close();
-
-    if (times.empty()) {
-        std::cerr << "No timing data found in file: " << timing_file << std::endl;
-        return 0;  // 시간이 없을 경우 0 반환
-    }
-
-    // 벡터의 모든 값의 합을 구한 후, 벡터 크기로 나누어 평균 계산
-    double sum = std::accumulate(times.begin(), times.end(), 0.0);
-    double average = sum / times.size();
-
-    return average;
 }
-
-/*
-// no use
-void EuclideanClustering(const pcl::PointCloud<pcl::PointXYZ>::Ptr &cloudIn, 
-                            std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &outputClusters, double &time_taken)
-{
-    auto start = std::chrono::steady_clock::now();
-
-    if (cloudIn->points.empty()) {
-        std::cerr << "Input cloud is empty! <- EuclideanClustering" << std::endl;
-        return;
-    }
-
-    outputClusters.clear();
-
-    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
-
-    // mingu
-    tree->setInputCloud(cloudIn);
-
-    std::vector<pcl::PointIndices> clusterIndices;
-    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-    ec.setClusterTolerance(clusterTolerance);
-    ec.setMinClusterSize(minSize);
-    ec.setMaxClusterSize(maxSize);
-    ec.setSearchMethod(tree);
-    // mingu
-    ec.setInputCloud(cloudIn);
-
-    ec.extract(clusterIndices);
-
-    for(pcl::PointIndices getIndices: clusterIndices)
-    {
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloudCluster (new pcl::PointCloud<pcl::PointXYZ>);
-        for (int index : getIndices.indices)
-            // mingu
-            cloudCluster->points.push_back (cloudIn->points[index]);
-
-        cloudCluster->width = cloudCluster->points.size();
-        cloudCluster->height = 1;
-        cloudCluster->is_dense = true;
-
-        // size filtering
-        pcl::PointXYZ minPt, maxPt;
-        pcl::getMinMax3D(*cloudCluster, minPt, maxPt);
-        double clusterSizeX = maxPt.x - minPt.x;
-        double clusterSizeY = maxPt.y - minPt.y;
-        double clusterSizeZ = maxPt.z - minPt.z;
-
-        if (clusterSizeX > minClusterSizeX && clusterSizeX < maxClusterSizeX
-        && clusterSizeY > minClusterSizeY && clusterSizeY < maxClusterSizeY
-        && clusterSizeZ > minClusterSizeZ && clusterSizeZ < maxClusterSizeZ) 
-        {           
-            outputClusters.push_back(cloudCluster);
-        }
-    }
-
-    auto end = std::chrono::steady_clock::now();
-    std::chrono::duration<double> elapsed_seconds = end - start;
-    time_taken = elapsed_seconds.count();
-}
-
-#include "depth_clustering/depth_cluster.h"
-void depthClustering(const pcl::PointCloud<PointType>::Ptr &cloudIn, 
-                    std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &outputClusters, double &time_taken)
-{
-    auto start = std::chrono::steady_clock::now();
-
-    if (cloudIn->points.empty()) {
-        std::cerr << "Input cloud is empty!" << std::endl;
-        return;
-    }
-
-    DepthCluster depthCluster(vertical_resolution, horizontal_resolution, lidar_lines, cluster_size);
-
-    // 입력 포인트 클라우드 설정
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloudInXYZI(new pcl::PointCloud<pcl::PointXYZI>);
-    copyPointCloud(*cloudIn, *cloudInXYZI); // PointType에서 XYZI로 변환
-    depthCluster.setInputCloud(cloudInXYZI);
-
-    // 클러스터 추출 실행
-    auto clusters_indices = depthCluster.getClustersIndex();
-
-    // 결과 클러스터 추출
-    outputClusters.clear();
-    for (const auto& indices : clusters_indices) {
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloudCluster(new pcl::PointCloud<pcl::PointXYZ>);
-        for (int index : indices) {
-            // cloudCluster->points.push_back(cloudIn->points[index]);
-            pcl::PointXYZ point;
-            point.x = cloudIn->points[index].x;
-            point.y = cloudIn->points[index].y;
-            point.z = cloudIn->points[index].z;
-            cloudCluster->points.push_back(point);
-        }
-        cloudCluster->width = cloudCluster->points.size();
-        cloudCluster->height = 1;
-        cloudCluster->is_dense = true;
-        outputClusters.push_back(cloudCluster);
-    }
-
-    auto end = std::chrono::steady_clock::now();
-    std::chrono::duration<double> elapsed_seconds = end - start;
-    time_taken = elapsed_seconds.count();
-}
-
-// L-shape Fitting 과 비교용
-void fittingPCA(const std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &inputClusters, const ros::Time &input_stamp, 
-                jsk_recognition_msgs::BoundingBoxArray &output_bbox_array, double &time_taken)
-{
-    auto start = std::chrono::steady_clock::now();
-
-    output_bbox_array.boxes.clear();
-
-    for (auto cluster : inputClusters)
-    {
-        pcl::PCA<pcl::PointXYZ> pca;
-        pcl::PointXYZ minPoint, maxPoint;
-        pcl::getMinMax3D(*cluster, minPoint, maxPoint);
-
-        // Find the oriented bounding box
-        // pca.setInputCloud(cluster);
-        // Eigen::Vector3f eigen_values = pca.getEigenValues();
-        // Eigen::Matrix3f eigen_vectors = pca.getEigenVectors();
-
-        // Create jsk_recognition_msgs::BoundingBox
-        jsk_recognition_msgs::BoundingBox bbox;
-        bbox.header.stamp = input_stamp;
-        bbox.header.frame_id = frameID;
-        bbox.pose.position.x = (minPoint.x + maxPoint.x) / 2.0;
-        bbox.pose.position.y = (minPoint.y + maxPoint.y) / 2.0;
-        bbox.pose.position.z = (minPoint.z + maxPoint.z) / 2.0;
-        bbox.dimensions.x = maxPoint.x - minPoint.x;
-        bbox.dimensions.y = maxPoint.y - minPoint.y;
-        bbox.dimensions.z = maxPoint.z - minPoint.z;
-        // Eigen::Quaternionf quat(eigen_vectors);
-        // bbox.pose.orientation.x = quat.x();
-        // bbox.pose.orientation.y = quat.y();
-        // bbox.pose.orientation.z = quat.z();
-        // bbox.pose.orientation.w = quat.w();
-        bbox.pose.orientation.x = 0;
-        bbox.pose.orientation.y = 0;
-        bbox.pose.orientation.z = 0;
-        bbox.pose.orientation.w = 1;
-
-        output_bbox_array.boxes.push_back(bbox);
-    }
-
-    auto end = std::chrono::steady_clock::now();
-    std::chrono::duration<double> elapsed_seconds = end - start;
-    time_taken = elapsed_seconds.count();
-}
-*/

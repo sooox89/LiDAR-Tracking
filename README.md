@@ -1,19 +1,19 @@
+
 # LiDAR Tracking
 
 This is ROS package of LiDAR Tracking
 
-<p align="center"><img src=pictures/demo.gif alt="animated" /></p>
-
+<p align="center"><img src=pictures/integration.gif alt="animated" /></p>
 
 ## :open_file_folder: What's in this repository
 
 * ROS Noetic based LiDAR Tracking source code
-* Demo launch file ([demo.launch][launchlink])
+* Demo youtube link ([youtube][youtubelink])
 
-[launchlink]: https://github.com/inha-cvl/LiDAR-Tracking/tree/main/launch
+[youtubelink]: https://www.youtube.com/watch?v=YP5AAO_Eq5Y
 
 ## :package: Prerequisite packages
-You need to install ROS, PCL, Sophus, Eigen, JSK, Json...
+You need to install ROS, PCL, Sophus, Glog, Eigen, JSK, Json...
 
 ## :gear: How to build LiDAR-Tracking
 
@@ -26,12 +26,18 @@ $ catkin_make
 
 ## :runner: To run the demo
 
+* Download bag ([bagfile][onedrivelink])
+
+[onedrivelink]: https://1drv.ms/u/s!At4eTVNRwillgdsABY-z8AVEqmvoxg?e=PCqjYE
+
 ```bash
 # Start Tracking with bag file
 $ roscore
-$ roslaunch lidar_tracking demo.launch
 $ rosparam set /use_sim_time true
-$ rosbag play kiapi.bag --clock
+$ roslaunch lidar_tracking tracking.launch
+$ roslaunch openpcdet 3d_object_detector.launch # Deep Learning-based bounding box publishing needed
+$ roslaunch lidar_tracking integration.launch
+$ rosbag play songdo.bag --clock
 ```
 
 ## :pushpin: References
@@ -52,4 +58,3 @@ If you have any question, don't be hesitate let us know!
 * [Gyuseok Lee][link] :envelope: (rbtjr98@inha.edu)
 
 [link]: https://github.com/Lee-Gyu-Seok
-
