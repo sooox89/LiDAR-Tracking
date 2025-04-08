@@ -65,5 +65,15 @@
         "typeinfo": "cpp",
         "variant": "cpp",
         "bit": "cpp"
-    }
+    },
+    "python.autoComplete.extraPaths": [
+        "/home/casey/catkin_ws/devel/lib/python3/dist-packages",
+        "/opt/ros/noetic/lib/python3/dist-packages",
+        "/home/casey/catkin_ws/src/mobinha"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/casey/catkin_ws/devel/lib/python3/dist-packages",
+        "/opt/ros/noetic/lib/python3/dist-packages",
+        "/home/casey/catkin_ws/src/mobinha"
+    ]
 }
