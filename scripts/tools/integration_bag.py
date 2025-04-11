@@ -5,7 +5,7 @@ import rospy
 import os
 
 def create_integration_bag(ioniq_bag_path, avente_bag_path, output_bag_path):
-    # 먼저 ioniq_bag과 avente_bag의 INSPVA 메시지를 읽어옵니다.
+    # 먼저 avente_bag의 INSPVA 메시지를 읽어옵니다.
     ioniq_msgs = []
     avente_msgs = []
 

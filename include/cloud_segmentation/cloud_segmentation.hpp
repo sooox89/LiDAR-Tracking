@@ -809,7 +809,7 @@ void CloudSegmentation<PointT>::fittingLShape(const std::vector<pcl::PointCloud<
         bbox.dimensions.z = maxPoint.z - minPoint.z;
         bbox.pose.orientation.z = std::sin(yaw / 2.0);
         bbox.pose.orientation.w = std::cos(yaw / 2.0);
-
+        
         if (bbox.dimensions.x < filter_min_size_x || bbox.dimensions.x > filter_max_size_x ||
             bbox.dimensions.y < filter_min_size_y || bbox.dimensions.y > filter_max_size_y ||
             bbox.dimensions.z < filter_min_size_z || bbox.dimensions.z > filter_max_size_z) {

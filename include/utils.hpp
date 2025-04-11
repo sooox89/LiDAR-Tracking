@@ -213,7 +213,6 @@ double getBBoxOverlap(jsk_recognition_msgs::BoundingBox bbox1, jsk_recognition_m
         bbox1.pose.position.x + bbox1.dimensions.x / 2.0, 
         bbox1.pose.position.y + bbox1.dimensions.y / 2.0
     };
-    
     double boxB[4] = {
         bbox2.pose.position.x - bbox2.dimensions.x / 2.0, 
         bbox2.pose.position.y - bbox2.dimensions.y / 2.0, 

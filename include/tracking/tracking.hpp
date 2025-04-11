@@ -47,14 +47,16 @@ public:
     void updateWaypoints(const sensor_msgs::PointCloud2::ConstPtr &cloud_msg);
     void integrationBbox(jsk_recognition_msgs::BoundingBoxArray &cluster_bbox_array, 
                          jsk_recognition_msgs::BoundingBoxArray &deep_bbox_array,
-                         jsk_recognition_msgs::BoundingBoxArray &output_bbox_array, double &time_taken);
+                         jsk_recognition_msgs::BoundingBoxArray &output_bbox_array, 
+                         std::vector<bool> &deep_check_array,
+                         double &time_taken);
     
     void cropHDMapBbox(const jsk_recognition_msgs::BoundingBoxArray &input_bbox_array, 
                         jsk_recognition_msgs::BoundingBoxArray &output_bbox_array, 
                         const ros::Time &input_stamp, double& time_taken);
     
     void tracking(const jsk_recognition_msgs::BoundingBoxArray &bbox_array, jsk_recognition_msgs::BoundingBoxArray &track_bbox_array, 
-                    visualization_msgs::MarkerArray &track_text_array, const ros::Time &input_stamp, double &time_taken);
+                    visualization_msgs::MarkerArray &track_text_array, std::vector<bool> &deep_check_array, const ros::Time &input_stamp, double &time_taken);
 
     void transformBbox(const jsk_recognition_msgs::BoundingBoxArray &input_bbox_array, tf2_ros::Buffer &tf_buffer, 
                         jsk_recognition_msgs::BoundingBoxArray &output_bbox_array, double &time_taken);
@@ -116,36 +118,42 @@ void Tracking::updateWaypoints(const sensor_msgs::PointCloud2::ConstPtr &cloud_m
 
 void Tracking::integrationBbox(jsk_recognition_msgs::BoundingBoxArray &cluster_bbox_array, 
                                jsk_recognition_msgs::BoundingBoxArray &deep_bbox_array,
-                               jsk_recognition_msgs::BoundingBoxArray &output_bbox_array, double& time_taken) 
+                               jsk_recognition_msgs::BoundingBoxArray &output_bbox_array, 
+                               std::vector<bool> &deep_check_array,
+                               double& time_taken) 
 {
     auto start = std::chrono::steady_clock::now();
 
-    // if (cluster_bbox_array.header.stamp.toSec() == last_timestamp_cluster) {
-    //     cluster_bbox_array.boxes.clear();
-    // }
-    // if (deep_bbox_array.header.stamp.toSec() == last_timestamp_deep) {
-    //     deep_bbox_array.boxes.clear();
-    // }
-
     output_bbox_array.boxes.clear();
+    deep_check_array.clear();
     
     // mode
+    // integration : clustering + deep learning
     if (mode == 0) {
         for (const auto &cluster_bbox : cluster_bbox_array.boxes) {
             
             bool keep_cluster_bbox = true;
             for (const auto &deep_bbox : deep_bbox_array.boxes) {
-                double overlap = getBBoxOverlap(cluster_bbox, deep_bbox);
+                double overlap = getBBoxOverlap(cluster_bbox, deep_bbox);   // IoU 계산
+                // IoU가 thresh_iou보다 큰 경우 Deep Learning 결과를 신뢰
                 if (overlap > thresh_iou) {
                     keep_cluster_bbox = false;
                     break;
                 }
             }
+            // Clustering 결과는 유지
             if (keep_cluster_bbox) {
                 output_bbox_array.boxes.push_back(cluster_bbox);
+                deep_check_array.push_back(false);
             }
         }
-        output_bbox_array.boxes.insert(output_bbox_array.boxes.end(), deep_bbox_array.boxes.begin(), deep_bbox_array.boxes.end());
+        // Deep Learning 결과는 일단 전부 살림
+        output_bbox_array.boxes.insert(output_bbox_array.boxes.end(), deep_bbox_array.boxes.begin(), deep_bbox_array.boxes.end());  
+        // Deep Learning 검출 결과의 경우 True로 설정
+        size_t num_new_boxes = deep_bbox_array.boxes.size();
+        for (int i = 0; i < num_new_boxes; i++) {
+            deep_check_array.push_back(true);
+}
     } 
     else if (mode == 1) { output_bbox_array = cluster_bbox_array; } 
     else if (mode == 2) { output_bbox_array = deep_bbox_array; }
@@ -153,9 +161,10 @@ void Tracking::integrationBbox(jsk_recognition_msgs::BoundingBoxArray &cluster_b
     last_timestamp_cluster = cluster_bbox_array.header.stamp.toSec();
     last_timestamp_deep = deep_bbox_array.header.stamp.toSec();
 
+    // Integration 과정에서 소요되는 시간
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;
-    time_taken = elapsed_seconds.count();
+    time_taken = elapsed_seconds.count();   
     // saveTimeToFile(integration_time_log_path, time_taken);
 }
 
@@ -211,7 +220,8 @@ void Tracking::cropHDMapBbox(const jsk_recognition_msgs::BoundingBoxArray &input
 }
 
 void Tracking::tracking(const jsk_recognition_msgs::BoundingBoxArray &bbox_array, 
-                        jsk_recognition_msgs::BoundingBoxArray &track_bbox_array, visualization_msgs::MarkerArray &track_text_array,
+                        jsk_recognition_msgs::BoundingBoxArray &track_bbox_array, 
+                        visualization_msgs::MarkerArray &track_text_array, std::vector<bool> &deep_check_array, 
                         const ros::Time &input_stamp, double& time_taken)
 {
     auto start = std::chrono::steady_clock::now();
@@ -219,8 +229,8 @@ void Tracking::tracking(const jsk_recognition_msgs::BoundingBoxArray &bbox_array
     track_bbox_array.boxes.clear();
     track_bbox_array.header.stamp = input_stamp;
     track_text_array.markers.clear();
-    tracker.predictNewLocationOfTracks(input_stamp);
-    tracker.assignDetectionsTracks(bbox_array);
+    tracker.predictNewLocationOfTracks(input_stamp);    // Prediction
+    tracker.assignDetectionsTracks(bbox_array);         // Matching
     tracker.assignedTracksUpdate(bbox_array);    
     tracker.unassignedTracksUpdate();
     tracker.deleteLostTracks();
