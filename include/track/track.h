@@ -97,7 +97,7 @@ public:
 	double getBBoxRatio(jsk_recognition_msgs::BoundingBox bbox1, jsk_recognition_msgs::BoundingBox bbox2);
 	double getBBoxDistance(jsk_recognition_msgs::BoundingBox bbox1, jsk_recognition_msgs::BoundingBox bbox2);
 	bool has_recent_values_same_sign(const std::deque<float>& dq, int n);
-	visualization_msgs::Marker get_text_msg(struct trackingStruct &track, int i);
+	visualization_msgs::Marker get_text_msg(struct trackingStruct &track, int i, bool b_matched);
 	void predictNewLocationOfTracks(const ros::Time &currentTime);
 	void assignDetectionsTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray);
 	void assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray);

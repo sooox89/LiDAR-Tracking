@@ -12,7 +12,6 @@ public:
         nh_.getParam("Tracking/integration/mode", mode);
         nh_.getParam("Tracking/integration/thresh_iou", thresh_iou);
         nh_.getParam("Tracking/crop_hd_map/radius", radius);
-
         nh_.getParam("Tracking/track/invisibleCnt", invisibleCnt);
         nh_.getParam("Tracking/track/deque/number_velocity", number_velocity_deque);
         nh_.getParam("Tracking/track/deque/number_orientation", number_orientation_deque);

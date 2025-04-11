@@ -131,17 +131,28 @@ bool Track::has_recent_values_same_sign(const std::deque<float>& dq, int n)
     return true;
 }
 
-visualization_msgs::Marker Track::get_text_msg(struct trackingStruct &track, int i)
+visualization_msgs::Marker Track::get_text_msg(struct trackingStruct &track, int i, bool b_matched)
 {
 	visualization_msgs::Marker text;
 	text.ns = "text";
 	text.id = i;
 	text.action = visualization_msgs::Marker::ADD;
-	text.lifetime = ros::Duration(0.1);
+	text.lifetime = ros::Duration(0.08);
 	text.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
-	text.color.r = 1.0;
-	text.color.g = 1.0;
-	text.color.b = 1.0;
+
+	if(b_matched)
+	{
+		text.color.r = 1.0;
+		text.color.g = 0.0;
+		text.color.b = 0.0;
+	}
+	else
+	{
+		text.color.r = 0.0;
+		text.color.g = 0.0;
+		text.color.b = 1.0;
+	}
+
 	text.color.a = 1.0;
 	text.scale.z = 1.0;
 
@@ -227,13 +238,14 @@ void Track::assignDetectionsTracks(const jsk_recognition_msgs::BoundingBoxArray 
 		{
 			// Tracking Object가 Matching 되는 경우 
 			// 두 객체 사이의 거리가 m_thres_associationCost 보다 작은 경우 최종적으로 Matching 됨을 판단
-			std::cout<<"Kalman: "<<vecTracks[i].kf.statePost.at<float>(2)<<", Measurement: "<<tf::getYaw(bboxArray.boxes[assignment[i]].pose.orientation)<<std::endl;
 			if (Cost[i][assignment[i]] < m_thres_associationCost && abs(vecTracks[i].kf.statePost.at<float>(2)-tf::getYaw(bboxArray.boxes[assignment[i]].pose.orientation)) < 0.5236)
 			{
 				vecAssignments.push_back(pair<int, int>(i, assignment[i]));
 			}
 			else
 			{
+				// std::cout<<vecTracks[i].age<<"'s Kalman: "<<vecTracks[i].kf.statePost.at<float>(2)<<", Measurement: "<<tf::getYaw(bboxArray.boxes[assignment[i]].pose.orientation)<<std::endl;
+
 				vecUnassignedTracks.push_back(i);
 				assignment[i] = -1;	// Matching 되지 않았다고 설정
 			}
@@ -379,8 +391,12 @@ void Track::unassignedTracksUpdate()
 		vecTracks[id].age++;
 		vecTracks[id].cntConsecutiveInvisible++;
 
-		// 객체 유지
-		vecTracks[id].cur_bbox = vecTracks[id].pre_bbox;
+		// // 객체 유지
+		// vecTracks[id].cur_bbox = vecTracks[id].pre_bbox;
+		// tf::Quaternion quat_tf = tf::createQuaternionFromRPY(0.0, 0.0, vecTracks[id].kf.statePre.at<float>(2));
+		// geometry_msgs::Quaternion quat_msg;
+		// tf::quaternionTFToMsg(quat_tf, quat_msg);
+		// vecTracks[id].cur_bbox.pose.orientation = quat_msg;
 	}
 }
 
@@ -448,21 +464,19 @@ pair<jsk_recognition_msgs::BoundingBoxArray, visualization_msgs::MarkerArray> Tr
 {   
 	jsk_recognition_msgs::BoundingBoxArray bboxArray;
 	visualization_msgs::MarkerArray textArray;
-	std::cout << vecTracks.size() << std::endl;
+	bool b_Matched;
+
 	for (int i = 0; i < vecTracks.size(); i++)
 	{
-		// std::cout<<i<<"'s Age: "<<vecTracks[i].age<<", cntConsecutiveInvisible: "<<vecTracks[i].cntConsecutiveInvisible<<std::endl;
-		if (vecTracks[i].age >= 1 && vecTracks[i].cntConsecutiveInvisible == 0)
-		// if (vecTracks[i].age >= 1)
-		{	
-			vecTracks[i].cur_bbox.header.seq = vecTracks[i].age; // header.seq를 tracking object의 age로 사용
-			vecTracks[i].cur_bbox.value = vecTracks[i].v;			
-			bboxArray.boxes.push_back(vecTracks[i].cur_bbox);
-			textArray.markers.push_back(get_text_msg(vecTracks[i], i));
-		}
+
+		vecTracks[i].cur_bbox.header.seq = vecTracks[i].age; // header.seq를 tracking object의 age로 사용
+		bboxArray.boxes.push_back(vecTracks[i].cur_bbox);
+
+		// Tracking&Matching : Red, Just Prediction : Blue
+		b_Matched = (vecTracks[i].age >= 1 && vecTracks[i].cntConsecutiveInvisible == 0);
+		textArray.markers.push_back(get_text_msg(vecTracks[i], i, b_Matched));
+
 	}
-	// std::cout << "After :" << bboxArray.boxes.size() << std::endl;
-	
 	pair<jsk_recognition_msgs::BoundingBoxArray, visualization_msgs::MarkerArray> bbox_marker(bboxArray, textArray);
 	return bbox_marker;
 }
