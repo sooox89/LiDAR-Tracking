@@ -1,4 +1,5 @@
 #include "track/track.h"
+#include "utils.hpp"
 #include <cmath>
 
 using namespace cv;
@@ -6,37 +7,37 @@ using namespace cv;
 //constructor
 Track::Track()
 {
-	stateVariableDim = 4; // cx, cy, dx, dy
-	stateMeasureDim = 4;
+	stateVariableDim = 5;           // cx, cy, yaw, dx, dy
+	stateMeasureDim = 3;            // cx, cy, yaw
 	nextID = 0;
-	m_thres_invisibleCnt = 6;
+	m_thres_invisibleCnt = 10;
 	n_velocity_deque = 6;
 	n_orientation_deque = 6;
 	thr_velocity = 15; // m/s
-	thr_orientation = M_PI / 6; // 30 degree
+	// thr_orientation = M_PI / 6; // 30 degree -> rad : 0.5236
+	thr_orientation = 0.5236; // 30 degree -> rad : 0.5236
 
 	//A & Q ==> Predict process
 	//H & R ==> Estimation process
 	
 	// A 상태
 	m_matTransition = Mat::eye(stateVariableDim, stateVariableDim, CV_32F);
-	m_matTransition.at<float>(0, 2) = dt;
-	m_matTransition.at<float>(1, 3) = dt;
+	m_matTransition.at<float>(0, 3) = dt;
+	m_matTransition.at<float>(1, 4) = dt;
 
 	// H 관측
 	m_matMeasurement = Mat::zeros(stateMeasureDim, stateVariableDim, CV_32F);
-	m_matMeasurement.at<float>(0, 0) = 1.0f; // x
-	m_matMeasurement.at<float>(1, 1) = 1.0f; // y
-	m_matMeasurement.at<float>(2, 2) = 1.0f; // vx
-	m_matMeasurement.at<float>(3, 3) = 1.0f; // vy
+	m_matMeasurement.at<float>(0, 0) = 1.0f; // cx
+	m_matMeasurement.at<float>(1, 1) = 1.0f; // cy
+	m_matMeasurement.at<float>(2, 2) = 1.0f; // yaw
 	
-	// Q size small -> smooth 프로세스 노이즈
-	float Q[] = {1e-2f, 1e-2f, 1e-2f, 1e-2f};
+	// Q System Noise : 클수록 Kalman Gain이 증가함, 측정값의 영향 증가
+	float Q[] = {1e-1f, 1e-1f, 1e-2f, 1e-2f, 1e-2f};
 	Mat tempQ(stateVariableDim, 1, CV_32FC1, Q);
 	m_matProcessNoiseCov = Mat::diag(tempQ);
 
-	// R 관측 노이즈
-	float R[] = {1e-2f, 1e-2f, 1e-2f, 1e-2f};
+    // R Measurment Noise : 클수록 Kalman Gain이 감소, 측정값의 영향 감소
+	float R[] = {1e-2f, 1e-2f, 1e-1f};
 	Mat tempR(stateMeasureDim, 1, CV_32FC1, R);
 	m_matMeasureNoiseCov = Mat::diag(tempR);
 
@@ -68,9 +69,12 @@ void Track::orientation_push_back(std::deque<float> &deque, float o)
 
         float avg_yaw = sum_yaw / deque.size();
         float yaw_diff = std::fabs(angles::shortest_angular_distance(avg_yaw, o));
-
-        if (yaw_diff <= thr_orientation) { deque.push_back(o); }
-        else { deque.push_back(deque.back()); }
+        if (yaw_diff <= 0.5236) { deque.push_back(o); }
+        else 
+		{ 
+			std::cout << std::endl;
+			deque.push_back(deque.back()); 
+		}
 
 		deque.pop_front();
     }
@@ -127,17 +131,28 @@ bool Track::has_recent_values_same_sign(const std::deque<float>& dq, int n)
     return true;
 }
 
-visualization_msgs::Marker Track::get_text_msg(struct trackingStruct &track, int i)
+visualization_msgs::Marker Track::get_text_msg(struct trackingStruct &track, int i, bool b_matched)
 {
 	visualization_msgs::Marker text;
 	text.ns = "text";
 	text.id = i;
 	text.action = visualization_msgs::Marker::ADD;
-	text.lifetime = ros::Duration(0.1);
+	text.lifetime = ros::Duration(0.08);
 	text.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
-	text.color.r = 1.0;
-	text.color.g = 1.0;
-	text.color.b = 1.0;
+
+	if(b_matched)
+	{
+		text.color.r = 1.0;
+		text.color.g = 0.0;
+		text.color.b = 0.0;
+	}
+	else
+	{
+		text.color.r = 0.0;
+		text.color.g = 0.0;
+		text.color.b = 1.0;
+	}
+
 	text.color.a = 1.0;
 	text.scale.z = 1.0;
 
@@ -151,9 +166,6 @@ visualization_msgs::Marker Track::get_text_msg(struct trackingStruct &track, int
 	//sprintf(buf, "%f", text.pose.position.y);
 	// sprintf(buf, "ID: %d\nAge: %d\nV: %dkm/h", track.id, track.age ,int(track.v*3.6));
 	sprintf(buf, "Age: %d\nV: %dkm/h", track.age, int(track.v*3.6));
-	// sprintf(buf, "Age: %d\nD: %dm\nV: %dkm/h", track.age ,int(text.pose.position.x), int(track.v*3.6));
-	// sprintf(buf, "Score: %.2f\nD: %dm\nV: %dkm/h", track.score ,int(text.pose.position.x), int(track.v*3.6));
-
 	text.text = buf;
 
 	return text;
@@ -163,12 +175,15 @@ void Track::predictNewLocationOfTracks(const ros::Time &currentTime)
 {
     for (int i = 0; i < vecTracks.size(); i++)
     {
+
+		// Tracking 객체에 대한 dt 계산
         dt = currentTime.toSec() - vecTracks[i].lastTime;
 
         // 상태 전이 행렬 업데이트 (등가속도 모델 반영)
+		// A Matrix
         vecTracks[i].kf.transitionMatrix = Mat::eye(stateVariableDim, stateVariableDim, CV_32F);
-        vecTracks[i].kf.transitionMatrix.at<float>(0, 2) = dt;
-        vecTracks[i].kf.transitionMatrix.at<float>(1, 3) = dt;
+        vecTracks[i].kf.transitionMatrix.at<float>(0, 3) = dt;
+        vecTracks[i].kf.transitionMatrix.at<float>(1, 4) = dt;
 
         // 상태 예측
         vecTracks[i].kf.predict();
@@ -176,8 +191,9 @@ void Track::predictNewLocationOfTracks(const ros::Time &currentTime)
         // 예측된 위치와 속도 업데이트
         vecTracks[i].cur_bbox.pose.position.x = vecTracks[i].kf.statePre.at<float>(0);
         vecTracks[i].cur_bbox.pose.position.y = vecTracks[i].kf.statePre.at<float>(1);
-        vecTracks[i].vx = vecTracks[i].kf.statePre.at<float>(2);
-        vecTracks[i].vy = vecTracks[i].kf.statePre.at<float>(3);
+        vecTracks[i].orientation = vecTracks[i].kf.statePre.at<float>(2);
+        vecTracks[i].vx = vecTracks[i].kf.statePre.at<float>(3);
+        vecTracks[i].vy = vecTracks[i].kf.statePre.at<float>(4);
     }
 }
 
@@ -185,20 +201,21 @@ void Track::assignDetectionsTracks(const jsk_recognition_msgs::BoundingBoxArray 
 {
 	int N = (int)vecTracks.size();       //  N = number of tracking
 	int M = (int)bboxArray.boxes.size(); //  M = number of detection
-
 	vector<vector<double>> Cost(N, vector<double>(M)); //2 array
 
 	for (int i = 0; i < N; i++)
 	{
 		for (int j = 0; j < M; j++)
 		{
-			// Distance
-			Cost[i][j] = getBBoxDistance(vecTracks[i].cur_bbox, bboxArray.boxes[j]);
+			// 각 차량에 대한 예측값과 실제 검출된 객체와의 Center Distance 및 IoU를 고려한 cost 생성
+			Cost[i][j] = f32_weight_dist * getBBoxDistance(vecTracks[i].cur_bbox, bboxArray.boxes[j])
+							+ f32_weight_iou * (1-getBBoxOverlap(vecTracks[i].cur_bbox, bboxArray.boxes[j]));
 		}
 	}
 
 	vector<int> assignment;
 
+	// Tracking 객체에 대해 현재 State에서 Matching 된 Object의 Index가 assignment[i]에 할당됨
 	if (N != 0)
 	{
 		AssignmentProblemSolver APS;
@@ -211,20 +228,22 @@ void Track::assignDetectionsTracks(const jsk_recognition_msgs::BoundingBoxArray 
 
 	for (int i = 0; i < N; i++)
 	{
-		if (assignment[i] == -1)
+		if (assignment[i] == -1)	// Matching 되지 않은 경우
 		{
 			vecUnassignedTracks.push_back(i);
 		}
 		else
 		{
-			if ((Cost[i][assignment[i]] < m_thres_associationCost) )//&& (5 > getBBoxRatio(vecTracks[i].cur_bbox, bboxArray.boxes[assignment[i]])))
+			// Tracking Object가 Matching 되는 경우 
+			// 두 객체 사이의 거리가 m_thres_associationCost 보다 작은 경우 최종적으로 Matching 됨을 판단
+			if (Cost[i][assignment[i]] < m_thres_associationCost && abs(vecTracks[i].orientation-tf::getYaw(bboxArray.boxes[assignment[i]].pose.orientation)) < 0.5236)
 			{
 				vecAssignments.push_back(pair<int, int>(i, assignment[i]));
 			}
 			else
 			{
 				vecUnassignedTracks.push_back(i);
-				assignment[i] = -1;
+				// assignment[i] = -1;	// Matching 되지 않았다고 설정 => 새로운 Object로 할당되기 때문에 Bug 발생
 			}
 		}
 	}
@@ -242,15 +261,17 @@ void Track::assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &b
 {	
 	for (int i = 0; i < (int)vecAssignments.size(); i++)
 	{
-		int idT = vecAssignments[i].first;
-		int idD = vecAssignments[i].second;
+		int idT = vecAssignments[i].first;		// Tracking
+		int idD = vecAssignments[i].second;		// Detection
 
+		// 예측된 Tracking 객체와 실제 검출한 객체와의 Center 값의 차이와 dt를 이용해 vx, vy 계산
 		float dx = bboxArray.boxes[idD].pose.position.x - vecTracks[idT].pre_bbox.pose.position.x;
 		float dy = bboxArray.boxes[idD].pose.position.y - vecTracks[idT].pre_bbox.pose.position.y;
 
         float vx = dx / dt;
         float vy = dy / dt;
         
+		// Moving Average Filter를 통한 vx, vy 계산 안정화
         velocity_push_back(vecTracks[idT].vx_deque, vx);
         velocity_push_back(vecTracks[idT].vy_deque, vy);
 
@@ -260,41 +281,104 @@ void Track::assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &b
         Mat measure = Mat::zeros(stateMeasureDim, 1, CV_32FC1);
         measure.at<float>(0) = bboxArray.boxes[idD].pose.position.x;
         measure.at<float>(1) = bboxArray.boxes[idD].pose.position.y;
-		measure.at<float>(2) = vecTracks[idT].vx; // deque로 평균 낸 속도
-		measure.at<float>(3) = vecTracks[idT].vy;
+		geometry_msgs::Quaternion q_msg = bboxArray.boxes[idD].pose.orientation;
+		tf::Quaternion q_tf;
+		tf::quaternionMsgToTF(q_msg, q_tf);
+
+		double roll, pitch, yaw;
+		tf::Matrix3x3(q_tf).getRPY(roll, pitch, yaw);
+
+		measure.at<float>(2) = static_cast<float>(yaw); 
 
         vecTracks[idT].kf.correct(measure);
-		
-		// vecTracks[idT].v = getVectorScale(vecTracks[idT].kf.statePost.at<float>(2), vecTracks[idT].kf.statePost.at<float>(3));
-		vecTracks[idT].v = getVectorScale(vecTracks[idT].vx, vecTracks[idT].vy);
-		// vecTracks[idT].v = vecTracks[idT].kf.statePost.at<float>(2);
-		// vecTracks[idT].v = getVectorScale(vecTracks[idT].vx, vecTracks[idT].vy);
 
-		// 이전 orientation들과 비교
-        orientation_push_back(vecTracks[idT].orientation_deque, tf::getYaw(bboxArray.boxes[idD].pose.orientation));
-		vecTracks[idT].cur_bbox.pose.orientation = tf::createQuaternionMsgFromYaw(vecTracks[idT].orientation_deque.back());
+		// Kalman Filter 끝
+		// ----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-		// 0.5초 이상 추적 된 객체가 딥러닝 기반일 시, 딥러닝 정보를 우선적으로 사용
-		if (bboxArray.boxes[idD].label == 0 && vecTracks[idT].pre_bbox.label != 0 && vecTracks[idT].age > m_thres_invisibleCnt) {
-			vecTracks[idT].cur_bbox.dimensions = vecTracks[idT].pre_bbox.dimensions;
-			vecTracks[idT].cur_bbox.pose.orientation = vecTracks[idT].pre_bbox.pose.orientation; 
-			vecTracks[idT].cur_bbox.label = vecTracks[idT].pre_bbox.label; }
-		else {
-			vecTracks[idT].cur_bbox.dimensions = bboxArray.boxes[idD].dimensions;
-			vecTracks[idT].cur_bbox.pose.orientation = bboxArray.boxes[idD].pose.orientation;
-			vecTracks[idT].cur_bbox.label = bboxArray.boxes[idD].label; }
-		
+		// // 이전 orientation들과 비교
+        // orientation_push_back(vecTracks[idT].orientation_deque, tf::getYaw(bboxArray.boxes[idD].pose.orientation));
+		// vecTracks[idT].cur_bbox.pose.orientation = tf::createQuaternionMsgFromYaw(vecTracks[idT].orientation_deque.back());
+
+		// if (bboxArray.boxes[idD].label == 0 && vecTracks[idT].pre_bbox.label != 0 && vecTracks[idT].age > m_thres_invisibleCnt) {
+		// 	vecTracks[idT].cur_bbox.dimensions = vecTracks[idT].pre_bbox.dimensions;
+		// 	vecTracks[idT].cur_bbox.pose.orientation = vecTracks[idT].pre_bbox.pose.orientation; 
+		// 	vecTracks[idT].cur_bbox.label = vecTracks[idT].pre_bbox.label; 
+		// 	}
+		// else {
+			
+		// 	tf2::Quaternion quat_tf, quat_tf2;
+		// 	tf2::fromMsg(vecTracks[idT].pre_bbox.pose.orientation, quat_tf);
+
+		// 	// 오일러 각으로 변환
+		// 	double roll, pitch, yaw;
+		// 	double roll_after, pitch_after, yaw_after;
+		// 	tf2::Matrix3x3(quat_tf).getRPY(roll, pitch, yaw);
+
+		// 	tf2::fromMsg(vecTracks[idT].cur_bbox.pose.orientation, quat_tf2);
+		// 	tf2::Matrix3x3(quat_tf2).getRPY(roll_after, pitch_after, yaw_after);
+
+		// 	if(abs(yaw_after-yaw)>0.5236)
+		// 	{
+		// 		vecTracks[idT].cur_bbox.dimensions = vecTracks[idT].pre_bbox.dimensions;
+		// 		vecTracks[idT].cur_bbox.pose.orientation = vecTracks[idT].pre_bbox.pose.orientation; 
+		// 		vecTracks[idT].cur_bbox.label = vecTracks[idT].pre_bbox.label; 
+
+		// 		tf2::fromMsg(vecTracks[idT].pre_bbox.pose.orientation, quat_tf);
+		// 		tf2::Matrix3x3(quat_tf).getRPY(roll, pitch, yaw);
+
+		// 		tf2::fromMsg(vecTracks[idT].cur_bbox.pose.orientation, quat_tf2);
+		// 		tf2::Matrix3x3(quat_tf2).getRPY(roll_after, pitch_after, yaw_after);
+
+		// 		// 처음에 Yaw가 잘못 검출되는 경우를 방지하기 위해
+		// 		if(vecTracks[idT].f_continue_misoriented == false)
+		// 		{
+		// 			vecTracks[idT].cnt_misoriented += 1;
+		// 			vecTracks[idT].f_continue_misoriented = true;
+		// 		}
+		// 		else
+		// 		{
+		// 			vecTracks[idT].cnt_misoriented += 1;
+		// 			if(vecTracks[idT].cnt_misoriented > 3)
+		// 			{
+		// 				vecTracks[idT].cnt_misoriented = 0;
+		// 				vecTracks[idT].f_continue_misoriented = false;
+		// 				vecTracks[idT].cur_bbox.pose.orientation = bboxArray.boxes[idD].pose.orientation;
+		// 				vecTracks[idT].orientation_deque.clear();
+		// 			}
+		// 		}
+		// 	}
+		// 	else{
+		// 		vecTracks[idT].cur_bbox.dimensions = bboxArray.boxes[idD].dimensions;
+		// 		// vecTracks[idT].cur_bbox.pose.orientation = bboxArray.boxes[idD].pose.orientation;
+		// 		vecTracks[idT].cur_bbox.label = bboxArray.boxes[idD].label; 
+
+
+		// 	}
+		// 	}
+
+		// Kalman Object Variable Update (Age, cur/pre_boxx, cntTotalVisible, cntConsecutiveInvisible)
+		// // Position : x,y는 Kalmna Value 사용, Dimension
 		vecTracks[idT].cur_bbox.pose.position = bboxArray.boxes[idD].pose.position;
-		// vecTracks[idT].cur_bbox.label = bboxArray.boxes[idD].label;
+		vecTracks[idT].cur_bbox.pose.position.x = vecTracks[idT].kf.statePost.at<float>(0);
+		vecTracks[idT].cur_bbox.pose.position.y = vecTracks[idT].kf.statePost.at<float>(1);
+		vecTracks[idT].cur_bbox.dimensions = bboxArray.boxes[idD].dimensions;
+		// // Orientation : Kalmna Value 사용
+		tf::Quaternion quat_tf = tf::createQuaternionFromRPY(0.0, 0.0, vecTracks[idT].kf.statePost.at<float>(2));
+		geometry_msgs::Quaternion quat_msg;
+		tf::quaternionTFToMsg(quat_tf, quat_msg);
+		vecTracks[idT].cur_bbox.pose.orientation = quat_msg;
+		// // Timestamp
 		vecTracks[idT].cur_bbox.header.stamp = bboxArray.boxes[idD].header.stamp; // 중요, 이거 안 하면 time stamp 안 맞아서 스탬프가 오래됐을 경우 rviz에서 제대로 표시 안됨
-
-		vecTracks[idT].pre_bbox = vecTracks[idT].cur_bbox;
+		// // etc..
+		vecTracks[idT].v = getVectorScale(vecTracks[idT].vx, vecTracks[idT].vy);
 		vecTracks[idT].cls = vecTracks[idT].cur_bbox.label;
 		if (vecTracks[idT].cls != 0) { vecTracks[idT].score = bboxArray.boxes[idD].value; }
 		vecTracks[idT].lastTime = bboxArray.boxes[idD].header.stamp.toSec();
 		vecTracks[idT].age++;
 		vecTracks[idT].cntTotalVisible++;
 		vecTracks[idT].cntConsecutiveInvisible = 0;
+		// // cur -> pre
+		vecTracks[idT].pre_bbox = vecTracks[idT].cur_bbox;
 	}
 }
 
@@ -306,8 +390,10 @@ void Track::unassignedTracksUpdate()
 		vecTracks[id].age++;
 		vecTracks[id].cntConsecutiveInvisible++;
 
-		// 객체 유지
-		vecTracks[id].cur_bbox = vecTracks[id].pre_bbox;
+		tf::Quaternion quat_tf = tf::createQuaternionFromRPY(0.0, 0.0, vecTracks[id].kf.statePost.at<float>(2));
+		geometry_msgs::Quaternion quat_msg;
+		tf::quaternionTFToMsg(quat_tf, quat_msg);
+		vecTracks[id].cur_bbox.pose.orientation = quat_msg;
 	}
 }
 
@@ -354,14 +440,16 @@ void Track::createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxAr
 		m_matProcessNoiseCov.copyTo(ts.kf.processNoiseCov);     //Q
 		m_matMeasureNoiseCov.copyTo(ts.kf.measurementNoiseCov); //R
 
-		float P[] = {1e-2f, 1e-2f, 1e-1f, 1e-1f};
+		// 오차 공분산 초기값
+		float P[] = {1e-2f, 1e-2f, 1e-1f, 1e-1f, 1e-1f};
 		Mat tempCov(stateVariableDim, 1, CV_32FC1, P);
 		ts.kf.errorCovPost = Mat::diag(tempCov);
 
 		ts.kf.statePost.at<float>(0) = ts.cur_bbox.pose.position.x;
 		ts.kf.statePost.at<float>(1) = ts.cur_bbox.pose.position.y;
-		ts.kf.statePost.at<float>(2) = ts.vx;
-		ts.kf.statePost.at<float>(3) = ts.vy;
+		ts.kf.statePost.at<float>(2) = tf::getYaw(ts.cur_bbox.pose.orientation);
+		ts.kf.statePost.at<float>(3) = ts.vx;
+		ts.kf.statePost.at<float>(4) = ts.vy;
 
 		ts.lastTime = bboxArray.boxes[id].header.stamp.toSec();
 		
@@ -373,18 +461,18 @@ pair<jsk_recognition_msgs::BoundingBoxArray, visualization_msgs::MarkerArray> Tr
 {   
 	jsk_recognition_msgs::BoundingBoxArray bboxArray;
 	visualization_msgs::MarkerArray textArray;
-	
+	bool b_Matched;
 	for (int i = 0; i < vecTracks.size(); i++)
 	{
-		if (vecTracks[i].age >= 1 && vecTracks[i].cntConsecutiveInvisible == 0)
-		{	
-			vecTracks[i].cur_bbox.header.seq = vecTracks[i].age; // header.seq를 tracking object의 age로 사용
-			vecTracks[i].cur_bbox.value = vecTracks[i].v;			
-			bboxArray.boxes.push_back(vecTracks[i].cur_bbox);
-			textArray.markers.push_back(get_text_msg(vecTracks[i], i));
-		}
+
+		vecTracks[i].cur_bbox.header.seq = vecTracks[i].age; // header.seq를 tracking object의 age로 사용
+		bboxArray.boxes.push_back(vecTracks[i].cur_bbox);
+
+		// Tracking&Matching : Red, Just Prediction : Blue
+		b_Matched = (vecTracks[i].age >= 1 && vecTracks[i].cntConsecutiveInvisible == 0);
+		textArray.markers.push_back(get_text_msg(vecTracks[i], i, b_Matched));
+
 	}
-	
 	pair<jsk_recognition_msgs::BoundingBoxArray, visualization_msgs::MarkerArray> bbox_marker(bboxArray, textArray);
 	return bbox_marker;
 }

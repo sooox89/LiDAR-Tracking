@@ -123,7 +123,7 @@ visualization_msgs::MarkerArray ta2msg(const visualization_msgs::MarkerArray& ta
         visualization_msgs::Marker temp_marker = marker;
         temp_marker.header.stamp = stamp;
         temp_marker.header.frame_id = frame_id;
-        temp_marker.lifetime = ros::Duration(0.1);
+        temp_marker.lifetime = ros::Duration(0.08);
         ta_ROS.markers.push_back(temp_marker);
     }
 
@@ -141,7 +141,7 @@ visualization_msgs::MarkerArray bba2ma(const jsk_recognition_msgs::BoundingBoxAr
         
         visualization_msgs::Marker marker;
         marker.header.frame_id = frame_id;
-        marker.lifetime = ros::Duration(0.1);
+        marker.lifetime = ros::Duration(0.08);
         marker.header.stamp = stamp;
         marker.ns = "model";
         marker.id = i;
@@ -213,7 +213,6 @@ double getBBoxOverlap(jsk_recognition_msgs::BoundingBox bbox1, jsk_recognition_m
         bbox1.pose.position.x + bbox1.dimensions.x / 2.0, 
         bbox1.pose.position.y + bbox1.dimensions.y / 2.0
     };
-    
     double boxB[4] = {
         bbox2.pose.position.x - bbox2.dimensions.x / 2.0, 
         bbox2.pose.position.y - bbox2.dimensions.y / 2.0, 

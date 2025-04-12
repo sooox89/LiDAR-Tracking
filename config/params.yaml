@@ -23,13 +23,14 @@ Cloud_Segmentation:
     ang_bottom: 25
 
   crop:
+    # Origin Crop Range : -80 ~ 80
     max:
       x: 80.0
-      y: 80.0
+      y: 8.0
       z: 0.1
     min:
       x: -80.0
-      y: -80.0
+      y: -5.0
       z: -1.7 # kitti , nuscenes 1.6, songdo 1.7
     crop_ring:
       enabled: false
@@ -74,8 +75,8 @@ Cloud_Segmentation:
 
 Tracking:
   integration:
-    mode: 0 # 0: integration, 1: cluster, 2: deep
-    thresh_iou: 0.1
+    mode: 2 # 0: integration, 1: cluster, 2: deep
+    thresh_iou: 0.1 # IoU Threshold
   crop_hd_map:
     radius: 2.6
   track:

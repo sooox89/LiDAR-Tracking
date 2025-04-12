@@ -11,6 +11,7 @@
 #include <tf/tf.h>
 #include <jsk_recognition_msgs/BoundingBoxArray.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 #include "track/HungarianAlg.h"
 
@@ -19,6 +20,9 @@ struct trackingStruct
 	unsigned int id;
 	unsigned int age;
 	unsigned int cls;
+	unsigned int cnt_misoriented;
+	bool f_continue_misoriented = false;
+	// bool f_consecutive_invisible = false;
 	float score;
 	unsigned cntTotalVisible;
 	unsigned cntConsecutiveInvisible;
@@ -26,7 +30,7 @@ struct trackingStruct
 	jsk_recognition_msgs::BoundingBox cur_bbox;
 	jsk_recognition_msgs::BoundingBox pre_bbox;
 
-	float vx, vy, v;
+	float vx, vy, v, orientation;
 
 	std::deque<float> vx_deque, vy_deque, v_deque;
 	std::deque<float> orientation_deque;
@@ -56,6 +60,8 @@ private:
 	cv::Mat m_matMeasureNoiseCov;
 
 	float m_thres_associationCost;
+	float f32_weight_dist = 1.0;
+	float f32_weight_iou = 0.0;
 
 	float dt = 0.1;
 	
@@ -91,7 +97,7 @@ public:
 	double getBBoxRatio(jsk_recognition_msgs::BoundingBox bbox1, jsk_recognition_msgs::BoundingBox bbox2);
 	double getBBoxDistance(jsk_recognition_msgs::BoundingBox bbox1, jsk_recognition_msgs::BoundingBox bbox2);
 	bool has_recent_values_same_sign(const std::deque<float>& dq, int n);
-	visualization_msgs::Marker get_text_msg(struct trackingStruct &track, int i);
+	visualization_msgs::Marker get_text_msg(struct trackingStruct &track, int i, bool b_matched);
 	void predictNewLocationOfTracks(const ros::Time &currentTime);
 	void assignDetectionsTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray);
 	void assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray);
