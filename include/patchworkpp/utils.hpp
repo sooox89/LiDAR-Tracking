@@ -299,7 +299,6 @@ void save_all_accuracy(const pcl::PointCloud<PointXYZILID>& pc_curr,
                       double& accuracy, map<int, int>&pc_curr_gt_counts, map<int, int>&g_est_gt_counts){
 
 
-//  std::cout<<"debug: "<<acc_filename<<std::endl;
   ofstream sc_output2(acc_filename, ios::app);
 
   int num_True = count_num_ground(pc_curr);

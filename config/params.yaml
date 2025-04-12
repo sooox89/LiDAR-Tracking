@@ -75,7 +75,7 @@ Cloud_Segmentation:
 
 Tracking:
   integration:
-    mode: 0 # 0: integration, 1: cluster, 2: deep
+    mode: 2 # 0: integration, 1: cluster, 2: deep
     thresh_iou: 0.1 # IoU Threshold
   crop_hd_map:
     radius: 2.6

@@ -43,9 +43,7 @@ void callbackSynchronized(const jsk_recognition_msgs::BoundingBoxArray::ConstPtr
     publish_stamp = ros::Time::now();
 
     Tracking_->tracking(output_bbox_array, track_bbox_array, track_text_array, deep_check_array, cluster_bba_msg->header.stamp, t12);
-    std::cout << "correction Before : " << track_bbox_array.boxes.size()<< std::endl;
     Tracking_->correctionBboxRelativeSpeed(track_bbox_array, cluster_bba_msg->header.stamp, publish_stamp, corrected_bbox_array, t13);
-    std::cout << "correction After : " << corrected_bbox_array.boxes.size() << std::endl;
 
     pub_track_box.publish(bba2msg(corrected_bbox_array, publish_stamp, fixed_frame));
     pub_track_model.publish(bba2ma(corrected_bbox_array, publish_stamp, fixed_frame));
