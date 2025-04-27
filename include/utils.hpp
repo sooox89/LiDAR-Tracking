@@ -12,6 +12,8 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf/tf.h>
+#include <novatel_oem7_msgs/INSPVA.h>
+
 
 #include "point_type/velodyne_point.h"
 #include "point_type/os_point.h"

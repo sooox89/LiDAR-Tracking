@@ -6,6 +6,7 @@ ros::Publisher pub_track_box, pub_track_text, pub_track_model, pub_track_test, p
 
 // Track tracker;
 boost::shared_ptr<Tracking> Tracking_;
+boost::shared_ptr<EgoLocalization> EgoLocalization_;
 
 double t9, t10, t11, t12, t13, total;
 std::string fixed_frame;
@@ -42,7 +43,7 @@ void callbackSynchronized(const jsk_recognition_msgs::BoundingBoxArray::ConstPtr
 
     publish_stamp = ros::Time::now();
 
-    Tracking_->tracking(output_bbox_array, track_bbox_array, track_text_array, deep_check_array, cluster_bba_msg->header.stamp, t12);
+    Tracking_->tracking(output_bbox_array, track_bbox_array, track_text_array, deep_check_array, EgoLocalization_->yaw, cluster_bba_msg->header.stamp, t12);
     Tracking_->correctionBboxRelativeSpeed(track_bbox_array, cluster_bba_msg->header.stamp, publish_stamp, corrected_bbox_array, t13);
 
     pub_track_box.publish(bba2msg(corrected_bbox_array, publish_stamp, fixed_frame));
@@ -86,6 +87,10 @@ int main(int argc, char** argv)
     // pub_integration_box = pnh.advertise<jsk_recognition_msgs::BoundingBoxArray>("/mobinha/perception/lidar/integration_box", 1);
 
     Tracking_ = boost::make_shared<Tracking>(pnh);
+    EgoLocalization_ = boost::make_shared<EgoLocalization>();
+
+    // Ego Vehicle Orientation
+    ros::Subscriber sub_inspva = nh.subscribe("/novatel/oem7/inspva", 1, &EgoLocalization::update, EgoLocalization_.get());
 
     // message_filters
     message_filters::Subscriber<jsk_recognition_msgs::BoundingBoxArray> sub_cluster_box(nh, "/cloud_segmentation/cluster_box", 1);

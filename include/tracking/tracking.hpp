@@ -55,7 +55,7 @@ public:
                         const ros::Time &input_stamp, double& time_taken);
     
     void tracking(const jsk_recognition_msgs::BoundingBoxArray &bbox_array, jsk_recognition_msgs::BoundingBoxArray &track_bbox_array, 
-                    visualization_msgs::MarkerArray &track_text_array, std::vector<bool> &deep_check_array, const ros::Time &input_stamp, double &time_taken);
+                    visualization_msgs::MarkerArray &track_text_array, std::vector<bool> &deep_check_array, const double &egoVehicle_yaw, const ros::Time &input_stamp, double &time_taken);
 
     void transformBbox(const jsk_recognition_msgs::BoundingBoxArray &input_bbox_array, tf2_ros::Buffer &tf_buffer, 
                         jsk_recognition_msgs::BoundingBoxArray &output_bbox_array, double &time_taken);
@@ -221,8 +221,11 @@ void Tracking::cropHDMapBbox(const jsk_recognition_msgs::BoundingBoxArray &input
 void Tracking::tracking(const jsk_recognition_msgs::BoundingBoxArray &bbox_array, 
                         jsk_recognition_msgs::BoundingBoxArray &track_bbox_array, 
                         visualization_msgs::MarkerArray &track_text_array, std::vector<bool> &deep_check_array, 
+                        const double &egoVehicle_yaw,
                         const ros::Time &input_stamp, double& time_taken)
 {
+	cout<<"Ego: "<<egoVehicle_yaw<<endl;
+
     auto start = std::chrono::steady_clock::now();
 
     track_bbox_array.boxes.clear();
@@ -233,7 +236,7 @@ void Tracking::tracking(const jsk_recognition_msgs::BoundingBoxArray &bbox_array
     tracker.assignedTracksUpdate(bbox_array);    
     tracker.unassignedTracksUpdate();
     tracker.deleteLostTracks();
-    tracker.createNewTracks(bbox_array);
+    tracker.createNewTracks(bbox_array, egoVehicle_yaw);
     auto bbox = tracker.displayTrack();
     track_bbox_array = bbox.first;
     track_text_array = bbox.second;
@@ -374,3 +377,25 @@ void Tracking::correctionBboxTF(const jsk_recognition_msgs::BoundingBoxArray &in
     time_taken = elapsed_seconds.count();
     // saveTimeToFile(correction_time_log_path, time_taken);
 }
+
+class EgoLocalization
+{
+public:
+    double roll;
+    double pitch;
+    double yaw;
+
+    EgoLocalization()
+        : roll(0.0), pitch(0.0), yaw(0.0)
+    {
+    }
+
+    void update(const novatel_oem7_msgs::INSPVA::ConstPtr& msg)
+    {
+        // Roll, Pitch, Azimuth (Yaw) 업데이트
+        roll = msg->roll;
+        pitch = msg->pitch;
+        double yaw_deg = fmod((90.0 - msg->azimuth), 360.0); // Degree 기준으로 계산
+        yaw = yaw_deg * M_PI / 180.0; // Degree → Radian 변환해서 저장
+    }
+};

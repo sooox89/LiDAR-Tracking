@@ -289,7 +289,6 @@ void Track::assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &b
 		tf::Matrix3x3(q_tf).getRPY(roll, pitch, yaw);
 
 		measure.at<float>(2) = static_cast<float>(yaw); 
-
         vecTracks[idT].kf.correct(measure);
 
 		// Kalman Filter 끝
@@ -363,6 +362,7 @@ void Track::assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &b
 		vecTracks[idT].cur_bbox.pose.position.y = vecTracks[idT].kf.statePost.at<float>(1);
 		vecTracks[idT].cur_bbox.dimensions = bboxArray.boxes[idD].dimensions;
 		// // Orientation : Kalmna Value 사용
+		cout<<"ID: "<<vecTracks[idT].age<<", vecTracks[idT].kf.statePost.at<float>(2): "<<vecTracks[idT].kf.statePost.at<float>(2)<<endl;
 		tf::Quaternion quat_tf = tf::createQuaternionFromRPY(0.0, 0.0, vecTracks[idT].kf.statePost.at<float>(2));
 		geometry_msgs::Quaternion quat_msg;
 		tf::quaternionTFToMsg(quat_tf, quat_msg);
@@ -414,7 +414,7 @@ void Track::deleteLostTracks()
 
 }
 
-void Track::createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxArray)
+void Track::createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxArray, const double &egoVehicle_yaw)
 {
 	for (int i = 0; i < (int)vecUnssignedDetections.size(); i++)
 	{
@@ -428,6 +428,10 @@ void Track::createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxAr
 
 		ts.cur_bbox = bboxArray.boxes[id];
 		ts.pre_bbox = bboxArray.boxes[id];
+		// cout<<"Ego: "<<egoVehicle_yaw<<", BBox: "<<tf::getYaw(ts.cur_bbox.pose.orientation)<<endl;
+		// Commit Error
+		if(abs(tf::getYaw(ts.cur_bbox.pose.orientation)-egoVehicle_yaw)>1.0)
+			continue;
 
 		ts.vx = 0.0;
 		ts.vy = 0.0;
@@ -439,7 +443,6 @@ void Track::createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxAr
 		m_matMeasurement.copyTo(ts.kf.measurementMatrix);       //H
 		m_matProcessNoiseCov.copyTo(ts.kf.processNoiseCov);     //Q
 		m_matMeasureNoiseCov.copyTo(ts.kf.measurementNoiseCov); //R
-
 		// 오차 공분산 초기값
 		float P[] = {1e-2f, 1e-2f, 1e-1f, 1e-1f, 1e-1f};
 		Mat tempCov(stateVariableDim, 1, CV_32FC1, P);
