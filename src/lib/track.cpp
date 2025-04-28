@@ -294,67 +294,6 @@ void Track::assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &b
 		// Kalman Filter 끝
 		// ----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-		// // 이전 orientation들과 비교
-        // orientation_push_back(vecTracks[idT].orientation_deque, tf::getYaw(bboxArray.boxes[idD].pose.orientation));
-		// vecTracks[idT].cur_bbox.pose.orientation = tf::createQuaternionMsgFromYaw(vecTracks[idT].orientation_deque.back());
-
-		// if (bboxArray.boxes[idD].label == 0 && vecTracks[idT].pre_bbox.label != 0 && vecTracks[idT].age > m_thres_invisibleCnt) {
-		// 	vecTracks[idT].cur_bbox.dimensions = vecTracks[idT].pre_bbox.dimensions;
-		// 	vecTracks[idT].cur_bbox.pose.orientation = vecTracks[idT].pre_bbox.pose.orientation; 
-		// 	vecTracks[idT].cur_bbox.label = vecTracks[idT].pre_bbox.label; 
-		// 	}
-		// else {
-			
-		// 	tf2::Quaternion quat_tf, quat_tf2;
-		// 	tf2::fromMsg(vecTracks[idT].pre_bbox.pose.orientation, quat_tf);
-
-		// 	// 오일러 각으로 변환
-		// 	double roll, pitch, yaw;
-		// 	double roll_after, pitch_after, yaw_after;
-		// 	tf2::Matrix3x3(quat_tf).getRPY(roll, pitch, yaw);
-
-		// 	tf2::fromMsg(vecTracks[idT].cur_bbox.pose.orientation, quat_tf2);
-		// 	tf2::Matrix3x3(quat_tf2).getRPY(roll_after, pitch_after, yaw_after);
-
-		// 	if(abs(yaw_after-yaw)>0.5236)
-		// 	{
-		// 		vecTracks[idT].cur_bbox.dimensions = vecTracks[idT].pre_bbox.dimensions;
-		// 		vecTracks[idT].cur_bbox.pose.orientation = vecTracks[idT].pre_bbox.pose.orientation; 
-		// 		vecTracks[idT].cur_bbox.label = vecTracks[idT].pre_bbox.label; 
-
-		// 		tf2::fromMsg(vecTracks[idT].pre_bbox.pose.orientation, quat_tf);
-		// 		tf2::Matrix3x3(quat_tf).getRPY(roll, pitch, yaw);
-
-		// 		tf2::fromMsg(vecTracks[idT].cur_bbox.pose.orientation, quat_tf2);
-		// 		tf2::Matrix3x3(quat_tf2).getRPY(roll_after, pitch_after, yaw_after);
-
-		// 		// 처음에 Yaw가 잘못 검출되는 경우를 방지하기 위해
-		// 		if(vecTracks[idT].f_continue_misoriented == false)
-		// 		{
-		// 			vecTracks[idT].cnt_misoriented += 1;
-		// 			vecTracks[idT].f_continue_misoriented = true;
-		// 		}
-		// 		else
-		// 		{
-		// 			vecTracks[idT].cnt_misoriented += 1;
-		// 			if(vecTracks[idT].cnt_misoriented > 3)
-		// 			{
-		// 				vecTracks[idT].cnt_misoriented = 0;
-		// 				vecTracks[idT].f_continue_misoriented = false;
-		// 				vecTracks[idT].cur_bbox.pose.orientation = bboxArray.boxes[idD].pose.orientation;
-		// 				vecTracks[idT].orientation_deque.clear();
-		// 			}
-		// 		}
-		// 	}
-		// 	else{
-		// 		vecTracks[idT].cur_bbox.dimensions = bboxArray.boxes[idD].dimensions;
-		// 		// vecTracks[idT].cur_bbox.pose.orientation = bboxArray.boxes[idD].pose.orientation;
-		// 		vecTracks[idT].cur_bbox.label = bboxArray.boxes[idD].label; 
-
-
-		// 	}
-		// 	}
-
 		// Kalman Object Variable Update (Age, cur/pre_boxx, cntTotalVisible, cntConsecutiveInvisible)
 		// // Position : x,y는 Kalmna Value 사용, Dimension
 		vecTracks[idT].cur_bbox.pose.position = bboxArray.boxes[idD].pose.position;
@@ -362,7 +301,6 @@ void Track::assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &b
 		vecTracks[idT].cur_bbox.pose.position.y = vecTracks[idT].kf.statePost.at<float>(1);
 		vecTracks[idT].cur_bbox.dimensions = bboxArray.boxes[idD].dimensions;
 		// // Orientation : Kalmna Value 사용
-		cout<<"ID: "<<vecTracks[idT].age<<", vecTracks[idT].kf.statePost.at<float>(2): "<<vecTracks[idT].kf.statePost.at<float>(2)<<endl;
 		tf::Quaternion quat_tf = tf::createQuaternionFromRPY(0.0, 0.0, vecTracks[idT].kf.statePost.at<float>(2));
 		geometry_msgs::Quaternion quat_msg;
 		tf::quaternionTFToMsg(quat_tf, quat_msg);
@@ -428,8 +366,8 @@ void Track::createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxAr
 
 		ts.cur_bbox = bboxArray.boxes[id];
 		ts.pre_bbox = bboxArray.boxes[id];
-		// cout<<"Ego: "<<egoVehicle_yaw<<", BBox: "<<tf::getYaw(ts.cur_bbox.pose.orientation)<<endl;
-		// Commit Error
+
+		// Create New Tracking Object considered Ego Vehicle's Orientation
 		if(abs(tf::getYaw(ts.cur_bbox.pose.orientation)-egoVehicle_yaw)>1.0)
 			continue;
 

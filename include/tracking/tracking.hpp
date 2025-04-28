@@ -224,8 +224,6 @@ void Tracking::tracking(const jsk_recognition_msgs::BoundingBoxArray &bbox_array
                         const double &egoVehicle_yaw,
                         const ros::Time &input_stamp, double& time_taken)
 {
-	cout<<"Ego: "<<egoVehicle_yaw<<endl;
-
     auto start = std::chrono::steady_clock::now();
 
     track_bbox_array.boxes.clear();
