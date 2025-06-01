@@ -1,5 +1,48 @@
 #include "utils.hpp"
 
+class EgoLocalization
+{
+public:
+    double roll;
+    double pitch;
+    double yaw;  // rad
+
+    double vx;   // 동차계 x방향 속도
+    double vy;   // 동차계 y방향 속도
+    double v;    // 속도 크기 (m/s)
+
+    EgoLocalization()
+        : roll(0.0), pitch(0.0), yaw(0.0),
+          vx(0.0), vy(0.0), v(0.0)
+    {
+    }
+
+    void update(const novatel_oem7_msgs::INSPVA::ConstPtr& msg)
+    {
+        // 자세 정보
+        roll = msg->roll;
+        pitch = msg->pitch;
+        double yaw_deg = fmod((90.0 - msg->azimuth), 360.0); // 북쪽 기준
+        yaw = yaw_deg * M_PI / 180.0;
+
+        // 속도 계산
+        calculateVelocityAndHeading(msg);
+    }
+
+private:
+    void calculateVelocityAndHeading(const novatel_oem7_msgs::INSPVA::ConstPtr& msg)
+    {
+        double azimuth_rad = msg->azimuth * M_PI / 180.0;
+        double cos_azimuth = std::cos(azimuth_rad);
+        double sin_azimuth = std::sin(azimuth_rad);
+
+        vx = msg->north_velocity * cos_azimuth + msg->east_velocity * sin_azimuth;
+        vy = -msg->north_velocity * sin_azimuth + msg->east_velocity * cos_azimuth;
+
+        v = std::sqrt(vx * vx + vy * vy);
+    }
+};
+
 class Tracking {
 public:
     Tracking() {};
@@ -17,6 +60,9 @@ public:
         nh_.getParam("Tracking/track/deque/number_orientation", number_orientation_deque);
         nh_.getParam("Tracking/track/deque/thresh_velocity", thresh_velocity);
         nh_.getParam("Tracking/track/deque/thresh_orientation", thresh_orientation);
+        nh_.getParam("Tracking/postProcessing/thresh_x_distance", thresh_x_distance);
+        nh_.getParam("Tracking/postProcessing/thresh_y_distance", thresh_y_distance);
+        nh_.getParam("Tracking/postProcessing/thresh_predictSec", thresh_predictSec);
 
         // mission
         nh_.getParam("Mission/tracking/cluster_distance", cluster_distance);
@@ -67,6 +113,8 @@ public:
                         const ros::Time &cur_stamp, tf2_ros::Buffer &tf_buffer, 
                         jsk_recognition_msgs::BoundingBoxArray &output_bbox_array, double &time_taken);
     
+    void postProcessing(const jsk_recognition_msgs::BoundingBoxArray &corrected_bbox_array, lidar_tracking::AdjacentVehicle &msg_PostProcessing, const boost::shared_ptr<EgoLocalization>& st_EgoInfo, double& time_taken);
+
     void averageTime();
 
 private:
@@ -83,8 +131,11 @@ private:
     int invisibleCnt;
     int number_velocity_deque;
     int number_orientation_deque;
+    int thresh_x_distance;
+    int thresh_y_distance;
     float thresh_velocity;
     float thresh_orientation;
+    float thresh_predictSec;
 
     // mission
     int cluster_distance;
@@ -236,7 +287,7 @@ void Tracking::tracking(const jsk_recognition_msgs::BoundingBoxArray &bbox_array
     tracker.deleteLostTracks();
     tracker.createNewTracks(bbox_array, egoVehicle_yaw);
     auto bbox = tracker.displayTrack();
-    track_bbox_array = bbox.first;
+    track_bbox_array = bbox.first;    
     track_text_array = bbox.second;
 
     auto end = std::chrono::steady_clock::now();
@@ -297,7 +348,7 @@ void Tracking::correctionBboxRelativeSpeed(const jsk_recognition_msgs::BoundingB
 
         if (corrected_box.header.seq > invisibleCnt / 2 && corrected_box.label == 1) {
             
-            double velocity = std::abs(box.value);
+            double velocity = 0.704525;
             double yaw = tf::getYaw(box.pose.orientation);
             double delta_x = velocity * 0.2 * cos(yaw);
             double delta_y = velocity * 0.2 * sin(yaw);
@@ -316,6 +367,142 @@ void Tracking::correctionBboxRelativeSpeed(const jsk_recognition_msgs::BoundingB
     std::chrono::duration<double> elapsed_seconds = end - start;
     time_taken = elapsed_seconds.count();
     // saveTimeToFile(correction_time_log_path, time_taken);
+}
+
+void Tracking::postProcessing(const jsk_recognition_msgs::BoundingBoxArray &corrected_bbox_array, lidar_tracking::AdjacentVehicle &msg_PostProcessing, const boost::shared_ptr<EgoLocalization>& st_EgoInfo, double& time_taken)
+{
+    ros::Time start_time = ros::Time::now();
+
+    for (int i = 0; i < 8; ++i)
+        msg_PostProcessing.region_flags[i] = false;
+
+    msg_PostProcessing.ar_PoseVehicles.poses.clear();
+    msg_PostProcessing.ar_PoseVehicles.header.stamp = ros::Time::now();
+    // msg_PostProcessing.ar_PoseVehicles.header.frame_id = "base_link";
+
+    for (const auto& bbox : corrected_bbox_array.boxes) {
+        float x = bbox.pose.position.x;
+        float y = bbox.pose.position.y;
+
+        // msg_PostProcessing.ar_PoseVehicles.poses.push_back(bbox.pose);
+
+        int region = 0;
+        if (15 <= x && x <= 30 && 0 < y && y <= 4) region = 1;
+        else if (0 <= x && x < 15 && 0 < y && y <= 4) region = 2;
+        else if (-15 <= x && x < 0 && 0 < y && y <= 4) region = 3;
+        else if (-30 <= x && x < -15 && 0 < y && y <= 4) region = 4;
+        else if (15 <= x && x <= 30 && -4 <= y && y < 0) region = 5;
+        else if (0 <= x && x < 15 && -4 <= y && y < 0) region = 6;
+        else if (-15 <= x && x < 0 && -4 <= y && y < 0) region = 7;
+        else if (-30 <= x && x < -15 && -4 <= y && y < 0) region = 8;
+
+        // std::cout << "\033[33mRelative Velocity: " << int(bbox.value * 3.6) << "\033[0m" << std::endl;
+
+        // 유효 거리 내에 객체에 대한 3초 예측
+        if(region==2 || region==3 || region==6 || region==7)
+        {
+            geometry_msgs::Pose pose_with_velocity = bbox.pose;
+
+            // 1. Ego 속도
+            double v_ego = st_EgoInfo->v;  // 자차 속력 (m/s)
+
+            // 2. 객체 상대 속도
+            double v_rel = bbox.value;  // 상대 속도 (m/s)
+
+            // 3. 객체 절대 속도 = 자차 속도 + 상대 속도
+            double v_target = v_ego + v_rel;  // m/s
+
+            // 4. 객체 Heading 방향
+            double theta_target = tf::getYaw(bbox.pose.orientation);
+
+            // 5. 절대 속도를 객체 heading 방향에 적용한 속도 벡터
+            double vx_target = v_target * std::cos(theta_target);
+            double vy_target = v_target * std::sin(theta_target);
+
+            // 6. 현재 위치에 속력 정보를 z에 저장
+            pose_with_velocity.position.z = v_target * 3.6;  // km/h 저장
+
+            // 7. 현재 위치 저장
+            msg_PostProcessing.ar_PoseVehicles.poses.push_back(pose_with_velocity);
+
+            // 8. 3초 후 예측 위치 계산
+            geometry_msgs::Pose future_pose;
+            future_pose.position.x = bbox.pose.position.x + vx_target * thresh_predictSec;
+            future_pose.position.y = bbox.pose.position.y + vy_target * thresh_predictSec;
+            future_pose.position.z = v_target * 3.6;  // 동일한 속도 정보
+
+            future_pose.orientation = bbox.pose.orientation;
+
+            // 9. 예측 위치 저장
+            msg_PostProcessing.ar_PoseVehicles.poses.push_back(future_pose);
+            
+            // [ Ego 고려 ]
+            // geometry_msgs::Pose pose_with_velocity = bbox.pose;
+
+            // // 1. 자차 속도 벡터
+            // double v_ego = st_EgoInfo->v;
+            // double theta_ego = st_EgoInfo->yaw;
+            // double vx_ego = v_ego * std::cos(theta_ego);
+            // double vy_ego = v_ego * std::sin(theta_ego);
+
+            // // 2. 상대 속도 벡터 (bbox.value 사용 but 방향은 bbox.pose.orientation 사용)
+            // double v_rel = bbox.value;  // m/s
+            // double theta_target = tf::getYaw(bbox.pose.orientation);
+            // double vx_rel = v_rel * std::cos(theta_target);
+            // double vy_rel = v_rel * std::sin(theta_target);
+
+            // // 3. 절대 속도 벡터
+            // double vx_target = vx_ego + vx_rel;
+            // double vy_target = vy_ego + vy_rel;
+
+            // // 4. 절대 속력 저장 (for z)
+            // double v_target = std::sqrt(vx_target * vx_target + vy_target * vy_target);
+            // pose_with_velocity.position.z = v_target * 3.6;  // km/h 저장
+
+            // // 5. 현재 위치 저장
+            // msg_PostProcessing.ar_PoseVehicles.poses.push_back(pose_with_velocity);
+
+            // // 6. 예측 위치 계산
+            // geometry_msgs::Pose future_pose;
+            // future_pose.position.x = bbox.pose.position.x + vx_target * thresh_predictSec;
+            // future_pose.position.y = bbox.pose.position.y + vy_target * thresh_predictSec;
+            // future_pose.position.z = v_target * 3.6;
+
+            // future_pose.orientation = bbox.pose.orientation;
+
+            // // 7. 예측 위치 저장
+            // msg_PostProcessing.ar_PoseVehicles.poses.push_back(future_pose);
+        }
+
+        if (region > 0)
+            msg_PostProcessing.region_flags[region - 1] = true;
+    }
+
+    // // Check Result
+    // std::cout << "\033[31m[PostProcessing]\033[0m Region Flags: ";
+    // for (int i = 0; i < 8; ++i) {
+    //     std::cout << "R" << (i + 1) << ": ";
+    //     std::cout << "\033[31m" << (msg_PostProcessing.region_flags[i] ? "true" : "false") << "\033[0m  ";
+    // }
+    // std::cout << std::endl;
+
+    // Check Predict Position Result
+    std::cout << "\033[34m--- [AdjacentVehicle Pose Info] ---\033[0m" << std::endl;
+
+    const auto& poses = msg_PostProcessing.ar_PoseVehicles.poses;
+
+    for (size_t i = 0; i < poses.size(); ++i) {
+        const auto& p = poses[i];
+        std::cout << "\033[34m[" << (i % 2 == 0 ? "Current" : "Future") << "] "
+                << "x: " << p.position.x << ", "
+                << "y: " << p.position.y << ", "
+                << "speed(km/h): " << p.position.z << "\033[0m" << std::endl;
+    }
+
+    msg_PostProcessing.s32_NumVehicles = msg_PostProcessing.ar_PoseVehicles.poses.size()/2;
+
+    ros::Duration duration = ros::Time::now() - start_time;
+    time_taken = duration.toSec();
 }
 
 void Tracking::correctionBboxTF(const jsk_recognition_msgs::BoundingBoxArray &input_bbox_array, const ros::Time &input_stamp, 
@@ -376,24 +563,3 @@ void Tracking::correctionBboxTF(const jsk_recognition_msgs::BoundingBoxArray &in
     // saveTimeToFile(correction_time_log_path, time_taken);
 }
 
-class EgoLocalization
-{
-public:
-    double roll;
-    double pitch;
-    double yaw;
-
-    EgoLocalization()
-        : roll(0.0), pitch(0.0), yaw(0.0)
-    {
-    }
-
-    void update(const novatel_oem7_msgs::INSPVA::ConstPtr& msg)
-    {
-        // Roll, Pitch, Azimuth (Yaw) 업데이트
-        roll = msg->roll;
-        pitch = msg->pitch;
-        double yaw_deg = fmod((90.0 - msg->azimuth), 360.0); // Degree 기준으로 계산
-        yaw = yaw_deg * M_PI / 180.0; // Degree → Radian 변환해서 저장
-    }
-};

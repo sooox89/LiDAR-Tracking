@@ -2,13 +2,13 @@
 #include <csignal>
 #include "tracking/tracking.hpp"
 
-ros::Publisher pub_track_box, pub_track_text, pub_track_model, pub_track_test, pub_synchronized_cloud, pub_integration_box;
+ros::Publisher pub_track_box, pub_track_text, pub_track_model, pub_track_test, pub_synchronized_cloud, pub_integration_box, pub_postProcessing, pub_adjacent_markers;
 
 // Track tracker;
 boost::shared_ptr<Tracking> Tracking_;
 boost::shared_ptr<EgoLocalization> EgoLocalization_;
 
-double t9, t10, t11, t12, t13, total;
+double t9, t10, t11, t12, t13, t14, total;
 std::string fixed_frame;
 
 tf2_ros::Buffer tf_buffer;
@@ -16,6 +16,8 @@ tf2_ros::Buffer tf_buffer;
 jsk_recognition_msgs::BoundingBoxArray cluster_bbox_array, deep_bbox_array, integration_bbox_array, filtered_bbox_array, 
                                         output_bbox_array, track_bbox_array, transformed_bbox_array, corrected_bbox_array;
 visualization_msgs::MarkerArray track_text_array, track_model_array;
+
+lidar_tracking::AdjacentVehicle msg_PostProcessing;
 
 std::vector<bool> deep_check_array;    // Checklist for Deep Learning based Object 
 std::string lidar_frame, target_frame, world_frame;
@@ -45,6 +47,46 @@ void callbackSynchronized(const jsk_recognition_msgs::BoundingBoxArray::ConstPtr
 
     Tracking_->tracking(output_bbox_array, track_bbox_array, track_text_array, deep_check_array, EgoLocalization_->yaw, cluster_bba_msg->header.stamp, t12);
     Tracking_->correctionBboxRelativeSpeed(track_bbox_array, cluster_bba_msg->header.stamp, publish_stamp, corrected_bbox_array, t13);
+
+    // Tracking Object Post-processing
+    // x_dist, y_dist Parameter Define
+    Tracking_->postProcessing(corrected_bbox_array, msg_PostProcessing, EgoLocalization_, t14);
+    pub_postProcessing.publish(msg_PostProcessing);
+
+    // Pub Point
+    // Marker 메시지 생성
+    visualization_msgs::Marker marker;
+    marker.header.frame_id = fixed_frame;
+    marker.header.stamp = publish_stamp;
+    marker.ns = "adjacent_vehicle_points";
+    marker.id = 0;
+    marker.type = visualization_msgs::Marker::SPHERE_LIST;
+    marker.action = visualization_msgs::Marker::ADD;
+    marker.pose.orientation.w = 1.0;
+    marker.scale.x = 1.5;
+    marker.scale.y = 1.5;
+    marker.scale.z = 1.5;
+    marker.lifetime = ros::Duration(0.3);  // 지속시간
+
+    // 파란색 = 현재 위치, 빨간색 = 예측 위치
+    for (size_t i = 0; i < msg_PostProcessing.ar_PoseVehicles.poses.size(); ++i) {
+        const auto& pose = msg_PostProcessing.ar_PoseVehicles.poses[i];
+        geometry_msgs::Point p;
+        p.x = pose.position.x;
+        p.y = pose.position.y;
+        p.z = 0.3;
+        marker.points.push_back(p);
+
+        std_msgs::ColorRGBA color;
+        if (i % 2 == 0) {  // 현재 위치
+            color.r = 0.0; color.g = 0.0; color.b = 1.0; color.a = 1.0;
+        } else {           // 예측 위치
+            color.r = 1.0; color.g = 0.0; color.b = 0.0; color.a = 1.0;
+        }
+        marker.colors.push_back(color);
+    }
+
+    pub_adjacent_markers.publish(marker);
 
     pub_track_box.publish(bba2msg(corrected_bbox_array, publish_stamp, fixed_frame));
     pub_track_model.publish(bba2ma(corrected_bbox_array, publish_stamp, fixed_frame));
@@ -84,6 +126,11 @@ int main(int argc, char** argv)
     pub_track_text = pnh.advertise<visualization_msgs::MarkerArray>("/mobinha/visualize/visualize/track_text", 1);
     pub_track_model = pnh.advertise<visualization_msgs::MarkerArray>("/mobinha/visualize/visualize/track_model", 1);
     pub_synchronized_cloud = pnh.advertise<sensor_msgs::PointCloud2>("/cloud_segmentation/synchronized_cloud", 1);
+
+    // // Post-processing Publisher
+    pub_postProcessing = pnh.advertise<lidar_tracking::AdjacentVehicle>("/lidar_tracking/adjacent_vehicles", 1);
+    pub_adjacent_markers = pnh.advertise<visualization_msgs::Marker>("/lidar_tracking/adjacent_vehicle_markers", 1);
+
     // pub_integration_box = pnh.advertise<jsk_recognition_msgs::BoundingBoxArray>("/mobinha/perception/lidar/integration_box", 1);
 
     Tracking_ = boost::make_shared<Tracking>(pnh);

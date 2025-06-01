@@ -1,0 +1,3 @@
+bool[8] region_flags
+int32 s32_NumVehicles
+geometry_msgs/PoseArray ar_PoseVehicles

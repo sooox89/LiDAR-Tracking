@@ -407,7 +407,10 @@ pair<jsk_recognition_msgs::BoundingBoxArray, visualization_msgs::MarkerArray> Tr
 	{
 
 		vecTracks[i].cur_bbox.header.seq = vecTracks[i].age; // header.seq를 tracking object의 age로 사용
+		// Relative Velocity Update(m/s)
+		vecTracks[i].cur_bbox.value = vecTracks[i].v;
 		bboxArray.boxes.push_back(vecTracks[i].cur_bbox);
+		
 
 		// Tracking&Matching : Red, Just Prediction : Blue
 		b_Matched = (vecTracks[i].age >= 1 && vecTracks[i].cntConsecutiveInvisible == 0);

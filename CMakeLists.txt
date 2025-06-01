@@ -33,6 +33,11 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(OpenCV REQUIRED)
 
+add_message_files(
+  FILES
+  AdjacentVehicle.msg
+)
+
 generate_messages(
         DEPENDENCIES
         std_msgs
@@ -52,7 +57,7 @@ endif()
 catkin_package(
         INCLUDE_DIRS
         LIBRARIES
-        CATKIN_DEPENDS roscpp rospy std_msgs
+        CATKIN_DEPENDS roscpp rospy std_msgs message_runtime geometry_msgs
 DEPENDS system_lib
 INCLUDE_DIRS include
 LIBRARIES opencv track_lib
