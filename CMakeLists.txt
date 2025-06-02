@@ -8,13 +8,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# jinwoo_ws
-set(Eigen3_DIR "/usr/local/share/eigen3/cmake")
-find_package(Eigen3 3.4 REQUIRED NO_DEFAULT_PATH)
-include_directories(/usr/local/include/eigen3)
-
-#####################################
-
 find_package(yaml-cpp REQUIRED)
 
 find_package(catkin REQUIRED COMPONENTS

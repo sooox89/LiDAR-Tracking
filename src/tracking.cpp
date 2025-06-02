@@ -35,9 +35,11 @@ void callbackSynchronized(const jsk_recognition_msgs::BoundingBoxArray::ConstPtr
 
     if (checkTransform(tf_buffer, world_frame, target_frame)) {
         Tracking_->transformBbox(integration_bbox_array, tf_buffer, transformed_bbox_array, t10);
-        Tracking_->cropHDMapBbox(transformed_bbox_array, filtered_bbox_array, cluster_bba_msg->header.stamp, t11);
-        fixed_frame = target_frame;
-        output_bbox_array = filtered_bbox_array;
+        // Tracking_->cropHDMapBbox(transformed_bbox_array, filtered_bbox_array, cluster_bba_msg->header.stamp, t11); // Problem
+        // fixed_frame = target_frame; //origin 0521
+        // output_bbox_array = filtered_bbox_array; //origin 0521
+        fixed_frame = lidar_frame;
+        output_bbox_array = integration_bbox_array;
     } else {
         fixed_frame = lidar_frame;
         output_bbox_array = integration_bbox_array;
@@ -148,7 +150,7 @@ int main(int argc, char** argv)
     sync.setMaxIntervalDuration(ros::Duration(0.05));
     sync.registerCallback(boost::bind(&callbackSynchronized, _1, _2));
 
-    ros::Subscriber sub_waypoints = nh.subscribe("/waypoints", 1, &Tracking::updateWaypoints, Tracking_.get());
+    // ros::Subscriber sub_waypoints = nh.subscribe("/waypoints", 1, &Tracking::updateWaypoints, Tracking_.get());
     ros::Subscriber sub_cloud = nh.subscribe("/cloud_segmentation/undistortioncloud", 1, callbackCloud);
 
     ros::spin();
