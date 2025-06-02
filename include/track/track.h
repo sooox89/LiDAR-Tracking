@@ -104,7 +104,7 @@ public:
 	// void assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &bboxArray, const geometry_msgs::PoseStamped &enu_pose);
 	void unassignedTracksUpdate();
 	void deleteLostTracks();
-	void createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray);
+	void createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray, const double &egoVehicle_yaw);
 	pair<jsk_recognition_msgs::BoundingBoxArray, visualization_msgs::MarkerArray> displayTrack();
 };
 

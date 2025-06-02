@@ -129,7 +129,6 @@ class Integration:
         self.roll = msg.roll
         self.pitch = msg.pitch
         self.azimuth = (90 - msg.azimuth) % 360
-
         quaternion = tf.transformations.quaternion_from_euler(
             math.radians(self.roll), math.radians(self.pitch), math.radians(self.azimuth))
         self.br.sendTransform(

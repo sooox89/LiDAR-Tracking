@@ -289,72 +289,10 @@ void Track::assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &b
 		tf::Matrix3x3(q_tf).getRPY(roll, pitch, yaw);
 
 		measure.at<float>(2) = static_cast<float>(yaw); 
-
         vecTracks[idT].kf.correct(measure);
 
 		// Kalman Filter 끝
 		// ----------------------------------------------------------------------------------------------------------------------------------------------------------
-
-		// // 이전 orientation들과 비교
-        // orientation_push_back(vecTracks[idT].orientation_deque, tf::getYaw(bboxArray.boxes[idD].pose.orientation));
-		// vecTracks[idT].cur_bbox.pose.orientation = tf::createQuaternionMsgFromYaw(vecTracks[idT].orientation_deque.back());
-
-		// if (bboxArray.boxes[idD].label == 0 && vecTracks[idT].pre_bbox.label != 0 && vecTracks[idT].age > m_thres_invisibleCnt) {
-		// 	vecTracks[idT].cur_bbox.dimensions = vecTracks[idT].pre_bbox.dimensions;
-		// 	vecTracks[idT].cur_bbox.pose.orientation = vecTracks[idT].pre_bbox.pose.orientation; 
-		// 	vecTracks[idT].cur_bbox.label = vecTracks[idT].pre_bbox.label; 
-		// 	}
-		// else {
-			
-		// 	tf2::Quaternion quat_tf, quat_tf2;
-		// 	tf2::fromMsg(vecTracks[idT].pre_bbox.pose.orientation, quat_tf);
-
-		// 	// 오일러 각으로 변환
-		// 	double roll, pitch, yaw;
-		// 	double roll_after, pitch_after, yaw_after;
-		// 	tf2::Matrix3x3(quat_tf).getRPY(roll, pitch, yaw);
-
-		// 	tf2::fromMsg(vecTracks[idT].cur_bbox.pose.orientation, quat_tf2);
-		// 	tf2::Matrix3x3(quat_tf2).getRPY(roll_after, pitch_after, yaw_after);
-
-		// 	if(abs(yaw_after-yaw)>0.5236)
-		// 	{
-		// 		vecTracks[idT].cur_bbox.dimensions = vecTracks[idT].pre_bbox.dimensions;
-		// 		vecTracks[idT].cur_bbox.pose.orientation = vecTracks[idT].pre_bbox.pose.orientation; 
-		// 		vecTracks[idT].cur_bbox.label = vecTracks[idT].pre_bbox.label; 
-
-		// 		tf2::fromMsg(vecTracks[idT].pre_bbox.pose.orientation, quat_tf);
-		// 		tf2::Matrix3x3(quat_tf).getRPY(roll, pitch, yaw);
-
-		// 		tf2::fromMsg(vecTracks[idT].cur_bbox.pose.orientation, quat_tf2);
-		// 		tf2::Matrix3x3(quat_tf2).getRPY(roll_after, pitch_after, yaw_after);
-
-		// 		// 처음에 Yaw가 잘못 검출되는 경우를 방지하기 위해
-		// 		if(vecTracks[idT].f_continue_misoriented == false)
-		// 		{
-		// 			vecTracks[idT].cnt_misoriented += 1;
-		// 			vecTracks[idT].f_continue_misoriented = true;
-		// 		}
-		// 		else
-		// 		{
-		// 			vecTracks[idT].cnt_misoriented += 1;
-		// 			if(vecTracks[idT].cnt_misoriented > 3)
-		// 			{
-		// 				vecTracks[idT].cnt_misoriented = 0;
-		// 				vecTracks[idT].f_continue_misoriented = false;
-		// 				vecTracks[idT].cur_bbox.pose.orientation = bboxArray.boxes[idD].pose.orientation;
-		// 				vecTracks[idT].orientation_deque.clear();
-		// 			}
-		// 		}
-		// 	}
-		// 	else{
-		// 		vecTracks[idT].cur_bbox.dimensions = bboxArray.boxes[idD].dimensions;
-		// 		// vecTracks[idT].cur_bbox.pose.orientation = bboxArray.boxes[idD].pose.orientation;
-		// 		vecTracks[idT].cur_bbox.label = bboxArray.boxes[idD].label; 
-
-
-		// 	}
-		// 	}
 
 		// Kalman Object Variable Update (Age, cur/pre_boxx, cntTotalVisible, cntConsecutiveInvisible)
 		// // Position : x,y는 Kalmna Value 사용, Dimension
@@ -414,7 +352,7 @@ void Track::deleteLostTracks()
 
 }
 
-void Track::createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxArray)
+void Track::createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxArray, const double &egoVehicle_yaw)
 {
 	for (int i = 0; i < (int)vecUnssignedDetections.size(); i++)
 	{
@@ -429,6 +367,10 @@ void Track::createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxAr
 		ts.cur_bbox = bboxArray.boxes[id];
 		ts.pre_bbox = bboxArray.boxes[id];
 
+		// Create New Tracking Object considered Ego Vehicle's Orientation
+		if(abs(tf::getYaw(ts.cur_bbox.pose.orientation)-egoVehicle_yaw)>1.0)
+			continue;
+
 		ts.vx = 0.0;
 		ts.vy = 0.0;
 		ts.v = 0.0;
@@ -439,7 +381,6 @@ void Track::createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxAr
 		m_matMeasurement.copyTo(ts.kf.measurementMatrix);       //H
 		m_matProcessNoiseCov.copyTo(ts.kf.processNoiseCov);     //Q
 		m_matMeasureNoiseCov.copyTo(ts.kf.measurementNoiseCov); //R
-
 		// 오차 공분산 초기값
 		float P[] = {1e-2f, 1e-2f, 1e-1f, 1e-1f, 1e-1f};
 		Mat tempCov(stateVariableDim, 1, CV_32FC1, P);
@@ -466,7 +407,10 @@ pair<jsk_recognition_msgs::BoundingBoxArray, visualization_msgs::MarkerArray> Tr
 	{
 
 		vecTracks[i].cur_bbox.header.seq = vecTracks[i].age; // header.seq를 tracking object의 age로 사용
+		// Relative Velocity Update(m/s)
+		vecTracks[i].cur_bbox.value = vecTracks[i].v;
 		bboxArray.boxes.push_back(vecTracks[i].cur_bbox);
+		
 
 		// Tracking&Matching : Red, Just Prediction : Blue
 		b_Matched = (vecTracks[i].age >= 1 && vecTracks[i].cntConsecutiveInvisible == 0);
