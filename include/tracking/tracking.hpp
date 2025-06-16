@@ -63,6 +63,7 @@ public:
         nh_.getParam("Tracking/postProcessing/thresh_x_distance", thresh_x_distance);
         nh_.getParam("Tracking/postProcessing/thresh_y_distance", thresh_y_distance);
         nh_.getParam("Tracking/postProcessing/thresh_predictSec", thresh_predictSec);
+        nh_.getParam("Tracking/postProcessing/thresh_f_distance", thresh_f_distance);
 
         // mission
         nh_.getParam("Mission/tracking/cluster_distance", cluster_distance);
@@ -133,6 +134,7 @@ private:
     int number_orientation_deque;
     int thresh_x_distance;
     int thresh_y_distance;
+    int thresh_f_distance;
     float thresh_velocity;
     float thresh_orientation;
     float thresh_predictSec;
@@ -373,12 +375,14 @@ void Tracking::postProcessing(const jsk_recognition_msgs::BoundingBoxArray &corr
 {
     ros::Time start_time = ros::Time::now();
 
-    for (int i = 0; i < 8; ++i)
+    for (int i = 0; i < 10; ++i)
         msg_PostProcessing.region_flags[i] = false;
 
     msg_PostProcessing.ar_PoseVehicles.poses.clear();
     msg_PostProcessing.ar_PoseVehicles.header.stamp = ros::Time::now();
-    // msg_PostProcessing.ar_PoseVehicles.header.frame_id = "base_link";
+
+    float x,y;
+    double v_ego, v_rel, v_target, theta_target, vx_target, vy_target;
 
     for (const auto& bbox : corrected_bbox_array.boxes) {
         float x = bbox.pose.position.x;
@@ -387,37 +391,39 @@ void Tracking::postProcessing(const jsk_recognition_msgs::BoundingBoxArray &corr
         // msg_PostProcessing.ar_PoseVehicles.poses.push_back(bbox.pose);
 
         int region = 0;
-        if (15 <= x && x <= 30 && 0 < y && y <= 4) region = 1;
-        else if (0 <= x && x < 15 && 0 < y && y <= 4) region = 2;
-        else if (-15 <= x && x < 0 && 0 < y && y <= 4) region = 3;
-        else if (-30 <= x && x < -15 && 0 < y && y <= 4) region = 4;
-        else if (15 <= x && x <= 30 && -4 <= y && y < 0) region = 5;
-        else if (0 <= x && x < 15 && -4 <= y && y < 0) region = 6;
-        else if (-15 <= x && x < 0 && -4 <= y && y < 0) region = 7;
-        else if (-30 <= x && x < -15 && -4 <= y && y < 0) region = 8;
+        if (thresh_x_distance         <= x && x <= thresh_x_distance*2 && thresh_y_distance*0.5 < y && y <= thresh_y_distance*1.5)   region = 1;
+        else if (0                    <= x && x <  thresh_x_distance   && thresh_y_distance*0.5 < y && y <= thresh_y_distance*1.5)   region = 2;
+        else if (-thresh_x_distance   <= x && x <  0                   && thresh_y_distance*0.5 < y && y <= thresh_y_distance*1.5)   region = 3;
+        else if (-thresh_x_distance*2 <= x && x <  -thresh_x_distance  && thresh_y_distance*0.5 < y && y <= thresh_y_distance*1.5)   region = 4;
+        else if (thresh_x_distance    <= x && x <= thresh_x_distance*2 && -thresh_y_distance*1.5 <= y && y < -thresh_y_distance*0.5) region = 5;
+        else if (0                    <= x && x <  thresh_x_distance   && -thresh_y_distance*1.5 <= y && y < -thresh_y_distance*0.5) region = 6;
+        else if (-thresh_x_distance   <= x && x <  0                   && -thresh_y_distance*1.5 <= y && y < -thresh_y_distance*0.5) region = 7;
+        else if (-thresh_x_distance*2 <= x && x <  -thresh_x_distance  && -thresh_y_distance*1.5 <= y && y < -thresh_y_distance*0.5) region = 8;
+        else if (0                    <= x && x <  thresh_f_distance   && -thresh_y_distance*0.5 <= y && y < thresh_y_distance*0.5)  region = 10;
+        else if (thresh_f_distance    <= x && x <  thresh_f_distance*1.5   && -thresh_y_distance*0.5 <= y && y < thresh_y_distance*0.5)  region = 9;
 
         // std::cout << "\033[33mRelative Velocity: " << int(bbox.value * 3.6) << "\033[0m" << std::endl;
 
         // 유효 거리 내에 객체에 대한 3초 예측
-        if(region==2 || region==3 || region==6 || region==7)
+        if(region==3 || region==4 || region==7 || region==8)
         {
             geometry_msgs::Pose pose_with_velocity = bbox.pose;
 
             // 1. Ego 속도
-            double v_ego = st_EgoInfo->v;  // 자차 속력 (m/s)
+            v_ego = st_EgoInfo->v;  // 자차 속력 (m/s)
 
             // 2. 객체 상대 속도
-            double v_rel = bbox.value;  // 상대 속도 (m/s)
+            v_rel = bbox.value;  // 상대 속도 (m/s)
 
             // 3. 객체 절대 속도 = 자차 속도 + 상대 속도
-            double v_target = v_ego + v_rel;  // m/s
+            v_target = v_ego + v_rel;  // m/s
 
             // 4. 객체 Heading 방향
-            double theta_target = tf::getYaw(bbox.pose.orientation);
+            theta_target = tf::getYaw(bbox.pose.orientation);
 
             // 5. 절대 속도를 객체 heading 방향에 적용한 속도 벡터
-            double vx_target = v_target * std::cos(theta_target);
-            double vy_target = v_target * std::sin(theta_target);
+            vx_target = v_target * std::cos(theta_target);
+            vy_target = v_target * std::sin(theta_target);
 
             // 6. 현재 위치에 속력 정보를 z에 저장
             pose_with_velocity.position.z = v_target * 3.6;  // km/h 저장
@@ -436,42 +442,6 @@ void Tracking::postProcessing(const jsk_recognition_msgs::BoundingBoxArray &corr
             // 9. 예측 위치 저장
             msg_PostProcessing.ar_PoseVehicles.poses.push_back(future_pose);
             
-            // [ Ego 고려 ]
-            // geometry_msgs::Pose pose_with_velocity = bbox.pose;
-
-            // // 1. 자차 속도 벡터
-            // double v_ego = st_EgoInfo->v;
-            // double theta_ego = st_EgoInfo->yaw;
-            // double vx_ego = v_ego * std::cos(theta_ego);
-            // double vy_ego = v_ego * std::sin(theta_ego);
-
-            // // 2. 상대 속도 벡터 (bbox.value 사용 but 방향은 bbox.pose.orientation 사용)
-            // double v_rel = bbox.value;  // m/s
-            // double theta_target = tf::getYaw(bbox.pose.orientation);
-            // double vx_rel = v_rel * std::cos(theta_target);
-            // double vy_rel = v_rel * std::sin(theta_target);
-
-            // // 3. 절대 속도 벡터
-            // double vx_target = vx_ego + vx_rel;
-            // double vy_target = vy_ego + vy_rel;
-
-            // // 4. 절대 속력 저장 (for z)
-            // double v_target = std::sqrt(vx_target * vx_target + vy_target * vy_target);
-            // pose_with_velocity.position.z = v_target * 3.6;  // km/h 저장
-
-            // // 5. 현재 위치 저장
-            // msg_PostProcessing.ar_PoseVehicles.poses.push_back(pose_with_velocity);
-
-            // // 6. 예측 위치 계산
-            // geometry_msgs::Pose future_pose;
-            // future_pose.position.x = bbox.pose.position.x + vx_target * thresh_predictSec;
-            // future_pose.position.y = bbox.pose.position.y + vy_target * thresh_predictSec;
-            // future_pose.position.z = v_target * 3.6;
-
-            // future_pose.orientation = bbox.pose.orientation;
-
-            // // 7. 예측 위치 저장
-            // msg_PostProcessing.ar_PoseVehicles.poses.push_back(future_pose);
         }
 
         if (region > 0)

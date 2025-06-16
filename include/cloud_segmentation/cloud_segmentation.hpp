@@ -848,6 +848,54 @@ void CloudSegmentation<PointT>::fittingLShape(const std::vector<pcl::PointCloud<
     // saveTimeToFile(lshape_time_log_path, time_taken);
 }
 
+// template<typename PointT> inline
+// void CloudSegmentation<PointT>::fittingLShape(const std::vector<pcl::PointCloud<ClusterPointT>>& inputClusters, 
+//                                                        jsk_recognition_msgs::BoundingBoxArray& output_bbox_array, double& time_taken) 
+// {
+//     if (inputClusters.empty()) {
+//         std::cerr << "Input clusters is empty! <- convertClustersToBBox" << std::endl;
+//         return;
+//     }
+
+//     output_bbox_array.boxes.clear();
+
+//     for (const pcl::PointCloud<ClusterPointT>& cluster : inputClusters) {
+//         ClusterPointT minPoint, maxPoint;
+//         pcl::getMinMax3D(cluster, minPoint, maxPoint);
+
+//         // 중심 좌표 계산
+//         double center_x = (minPoint.x + maxPoint.x) / 2.0;
+//         double center_y = (minPoint.y + maxPoint.y) / 2.0;
+//         double center_z = (minPoint.z + maxPoint.z) / 2.0;
+
+//         // 크기 계산
+//         double size_x = maxPoint.x - minPoint.x;
+//         double size_y = maxPoint.y - minPoint.y;
+//         double size_z = maxPoint.z - minPoint.z;
+
+//         // 최소 사이즈 필터링 (선택사항)
+//         if (size_x < filter_min_size_x || size_x > filter_max_size_x ||
+//             size_y < filter_min_size_y || size_y > filter_max_size_y ||
+//             size_z < filter_min_size_z || size_z > filter_max_size_z) {
+//             continue;
+//         }
+
+//         jsk_recognition_msgs::BoundingBox bbox;
+//         bbox.header.stamp = cur_stamp;
+//         bbox.header.frame_id = lidar_frame;
+//         bbox.pose.position.x = center_x;
+//         bbox.pose.position.y = center_y;
+//         bbox.pose.position.z = center_z;
+//         bbox.dimensions.x = size_x;
+//         bbox.dimensions.y = size_y;
+//         bbox.dimensions.z = size_z;
+//         bbox.pose.orientation.w = 1.0; // No rotation (identity quaternion)
+
+//         output_bbox_array.boxes.push_back(bbox);
+//     }
+// }
+
+
 template<typename PointT> inline
 void CloudSegmentation<PointT>::fittingPCA(const std::vector<pcl::PointCloud<ClusterPointT>>& inputClusters, 
                                            jsk_recognition_msgs::BoundingBoxArray& output_bbox_array, double& time_taken)

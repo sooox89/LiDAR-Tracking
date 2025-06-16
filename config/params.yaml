@@ -30,7 +30,7 @@ Cloud_Segmentation:
       z: 0.1
     min:
       x: -80.0
-      y: -8.0
+      y: -4.5
       z: -1.7 # kitti , nuscenes 1.6, songdo 1.7
     crop_ring:
       enabled: false
@@ -90,3 +90,4 @@ Tracking:
     thresh_x_distance: 15
     thresh_y_distance: 4
     thresh_predictSec: 3.0
+    thresh_f_distance: 20
