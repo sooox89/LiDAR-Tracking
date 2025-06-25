@@ -63,7 +63,7 @@ Cloud_Segmentation:
     adaptive:
       min_size: 10
       max_size: 2000
-      min_tolerance: 0.5
+      min_tolerance: 0.7
       max_tolerance: 1.0
       max_region_distance: 100
       number_region: 10
@@ -89,4 +89,5 @@ Tracking:
   postProcessing: # threshold for post processing
     thresh_x_distance: 15
     thresh_y_distance: 4
-    thresh_predictSec: 3.0
+    thresh_predictSec: 5.0
+    thresh_f_distance: 30

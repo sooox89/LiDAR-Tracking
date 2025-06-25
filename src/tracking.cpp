@@ -29,7 +29,6 @@ void callbackSynchronized(const jsk_recognition_msgs::BoundingBoxArray::ConstPtr
 {
     cluster_bbox_array = *cluster_bba_msg;
     deep_bbox_array = *deep_bba_msg;
-
     Tracking_->integrationBbox(cluster_bbox_array, deep_bbox_array, integration_bbox_array, deep_check_array, t9);
     std::cout << "\033[" << 18 << ";" << 30 << "H" << std::endl;
 
@@ -96,6 +95,10 @@ void callbackSynchronized(const jsk_recognition_msgs::BoundingBoxArray::ConstPtr
 
     total = ros::Time::now().toSec() - cluster_bba_msg->header.stamp.toSec();
 
+    std::cout<<"cluster_bbox_array.boxes.size(): "<<cluster_bbox_array.boxes.size()<<std::endl;
+    std::cout<<"deep_bbox_array.boxes.size(): "<<deep_bbox_array.boxes.size()<<std::endl;
+    std::cout<<"integration_bbox_array.boxes.size(): "<<integration_bbox_array.boxes.size()<<std::endl;
+    std::cout<<"track_bbox_array.boxes.size(): "<<track_bbox_array.boxes.size()<<std::endl;
     std::cout << "integration & transform : " << t9 + t10 << " sec" << std::endl;
     std::cout << "tracking : " << t12 << " sec" << std::endl;
     std::cout << "total : " << total << " sec" << std::endl;
@@ -133,7 +136,7 @@ int main(int argc, char** argv)
     pub_postProcessing = pnh.advertise<lidar_tracking::AdjacentVehicle>("/lidar_tracking/adjacent_vehicles", 1);
     pub_adjacent_markers = pnh.advertise<visualization_msgs::Marker>("/lidar_tracking/adjacent_vehicle_markers", 1);
 
-    // pub_integration_box = pnh.advertise<jsk_recognition_msgs::BoundingBoxArray>("/mobinha/perception/lidar/integration_box", 1);
+    pub_integration_box = pnh.advertise<jsk_recognition_msgs::BoundingBoxArray>("/mobinha/perception/lidar/integration_box", 1);
 
     Tracking_ = boost::make_shared<Tracking>(pnh);
     EgoLocalization_ = boost::make_shared<EgoLocalization>();

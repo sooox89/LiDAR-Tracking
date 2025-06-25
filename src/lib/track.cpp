@@ -368,8 +368,10 @@ void Track::createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxAr
 		ts.pre_bbox = bboxArray.boxes[id];
 
 		// Create New Tracking Object considered Ego Vehicle's Orientation
-		if(abs(tf::getYaw(ts.cur_bbox.pose.orientation)-egoVehicle_yaw)>1.0)
-			continue;
+		// if(abs(tf::getYaw(ts.cur_bbox.pose.orientation)-egoVehicle_yaw)>1.0)
+		// {
+		// 	continue;
+		// }
 
 		ts.vx = 0.0;
 		ts.vy = 0.0;
