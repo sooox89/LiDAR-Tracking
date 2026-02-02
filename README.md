@@ -45,16 +45,4 @@ $ rosbag play songdo.bag --clock
 - https://github.com/SmallMunich/L-Shape-Fitting
 - https://github.com/yzrobot/adaptive_clustering.git
 
-## Citation
-If you use our codes, please cite our [paper]
 
-
-[paper]: --
-
-
-## :postbox: Contact
-If you have any question, don't be hesitate let us know!
-
-* [Gyuseok Lee][link] :envelope: (rbtjr98@inha.edu)
-
-[link]: https://github.com/Lee-Gyu-Seok
